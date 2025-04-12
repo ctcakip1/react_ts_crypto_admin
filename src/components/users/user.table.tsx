@@ -11,9 +11,14 @@ import {
     PlusCircleOutlined,
     EditOutlined,
     DeleteOutlined,
+    CheckCircleOutlined,
+    CloseCircleOutlined,
+    WalletOutlined,
+    BankOutlined,
 } from "@ant-design/icons";
 import CreateUserModal from "./create.user.modal";
 import UpdateUserModal from "./update.user.modal";
+import { Link } from "react-router-dom";
 
 export interface ITwoFactorAuth {
     sendTo: string | null;
@@ -107,17 +112,14 @@ const UsersTable = () => {
             );
 
             if (res.ok) {
-                // Nếu status 200 hoặc 204, coi như xóa thành công
                 message.success("Delete User Success");
                 await getData(meta.current, meta.pageSize);
             } else {
-                // Nếu có lỗi, thử lấy thông báo từ body (nếu có)
                 let errorMessage = "Có lỗi xảy ra khi xóa người dùng.";
                 try {
                     const errorData = await res.json();
                     errorMessage = errorData.message || errorMessage;
                 } catch (jsonError) {
-                    // Nếu không có JSON trong body, dùng mã trạng thái
                     errorMessage = `HTTP error! Status: ${res.status}`;
                 }
                 notification.error({
@@ -140,31 +142,56 @@ const UsersTable = () => {
 
     const columns: TableProps<IUsers>["columns"] = [
         {
+            title: "ID",
+            dataIndex: "id",
+            key: "id",
+            width: 100, // Set a fixed width to control column size
+        },
+        {
             title: "Email",
             dataIndex: "email",
+            width: 200,
         },
         {
             title: "Full Name",
             dataIndex: "fullName",
+            width: 150,
         },
         {
             title: "Role",
             dataIndex: "role",
+            width: 100,
         },
         {
             title: "Mobile",
             dataIndex: "mobile",
+            width: 120,
         },
         {
             title: "Verified",
             dataIndex: "verified",
-            render: (verified: boolean) => (verified ? "Yes" : "No"),
+            width: 100,
+            render: (verified: boolean) => (
+                verified ? (
+                    <CheckCircleOutlined style={{ color: "green", fontSize: "20px" }} />
+                ) : (
+                    <CloseCircleOutlined style={{ color: "red", fontSize: "20px" }} />
+                )
+            ),
         },
         {
             title: "Action",
+            width: 350, // Set a fixed width for the Action column to accommodate buttons
             render: (value, record) => {
                 return (
-                    <div>
+                    <div
+                        style={{
+                            display: "flex",
+                            gap: "8px", // Reduced gap between buttons
+                            flexWrap: "nowrap", // Prevent wrapping to the next line
+                            alignItems: "center",
+                        }}
+                    >
                         <Button
                             type="primary"
                             icon={<EditOutlined />}
@@ -185,12 +212,37 @@ const UsersTable = () => {
                         >
                             <Button
                                 danger
-                                style={{ marginLeft: "20px" }}
                                 icon={<DeleteOutlined />}
                             >
                                 Delete
                             </Button>
                         </Popconfirm>
+
+                        <Link to={`/users/${record.id}/wallet-transactions`}>
+                            <Button
+                                type="dashed"
+                                icon={<WalletOutlined />}
+                                style={{
+                                    borderColor: "#1890ff",
+                                    color: "#1890ff",
+                                }}
+                            >
+                                Wallet Transactions
+                            </Button>
+                        </Link>
+
+                        <Link to={`/users/${record.id}/wallet`}>
+                            <Button
+                                type="dashed"
+                                icon={<BankOutlined />}
+                                style={{
+                                    borderColor: "#52c41a",
+                                    color: "#52c41a",
+                                }}
+                            >
+                                User Wallet
+                            </Button>
+                        </Link>
                     </div>
                 );
             },
@@ -224,6 +276,7 @@ const UsersTable = () => {
                 columns={columns}
                 dataSource={listUsers}
                 rowKey={"id"}
+                scroll={{ x: 1000 }} // Enable horizontal scrolling to prevent overflow
                 pagination={{
                     current: meta.current,
                     pageSize: meta.pageSize,

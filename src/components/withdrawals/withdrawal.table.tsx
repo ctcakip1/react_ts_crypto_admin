@@ -9,6 +9,7 @@ export interface IWithdrawal {
         id: number;
         status: string;
         amount: number;
+        amountInVnd: number;
         userId: number;
         dateTime: string;
     };
@@ -204,6 +205,12 @@ const WithdrawalsTable = () => {
             dataIndex: ["withdrawal", "amount"],
             key: "amount",
             render: (amount: number) => `$${amount.toLocaleString()}`,
+        },
+        {
+            title: "Amount In VND",
+            dataIndex: ["withdrawal", "amountInVnd"],
+            key: "amountInVnd",
+            render: (amountInVnd: number) => `${amountInVnd.toLocaleString()} VND`,
         },
         {
             title: "User ID",

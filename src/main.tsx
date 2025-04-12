@@ -11,13 +11,33 @@ import {
     useNavigate,
 } from "react-router-dom";
 import UsersPage from "./screens/users.page.tsx";
-import { FireOutlined, SmileOutlined, SpotifyOutlined, UserOutlined } from "@ant-design/icons";
-import { Button, Dropdown, Form, Input, Menu, message, Modal, notification, type MenuProps } from "antd";
+import { FireOutlined, SmileOutlined, SpotifyOutlined, UserOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import { Button, Dropdown, Form, Input, Menu, message, Modal, notification, type MenuProps, Descriptions } from "antd";
 import CoinsPage from "./screens/coins.page.tsx";
 import TransactionsPage from "./screens/transactions.page.tsx";
 import OrdersPage from "./screens/orders.page.tsx";
 import LoginPage from "./screens/login.page.tsx";
 import WithdrawalsPage from "./screens/withdrawals.page.tsx";
+import UserWalletTransactionTable from "./components/transactions/user.transaction.table.tsx";
+import UserWalletDisplay from "./components/transactions/user.wallet.display.tsx";
+
+// Định nghĩa interface cho dữ liệu profile
+interface UserProfile {
+    id: number;
+    fullName: string;
+    email: string;
+    mobile: string;
+    avatar: string;
+    twoFactorAuth: {
+        sendTo: string;
+        enable: boolean;
+    };
+    role: string;
+    referralCode: string;
+    referredBy: string | null;
+    referralCount: number;
+    verified: boolean;
+}
 
 const LayoutAdmin = () => {
     const navigate = useNavigate();
@@ -33,11 +53,9 @@ const LayoutAdmin = () => {
             navigate("/login");
         } else {
             setIsAuthenticated(true);
-            // Nếu đã có role trong localStorage, sử dụng nó
             if (storedRole) {
                 setUserRole(storedRole);
             } else {
-                // Gọi API để lấy role nếu chưa có
                 fetch("http://localhost:5000/api/users/profile", {
                     headers: {
                         Authorization: `Bearer ${jwt}`,
@@ -53,7 +71,7 @@ const LayoutAdmin = () => {
                     .then((data) => {
                         const role = data.role;
                         setUserRole(role);
-                        localStorage.setItem("role", role); // Lưu role vào localStorage
+                        localStorage.setItem("role", role);
                     })
                     .catch((error) => {
                         console.error("Error fetching user profile:", error);
@@ -61,7 +79,6 @@ const LayoutAdmin = () => {
                             message: "Error fetching user profile",
                             description: error.message,
                         });
-                        // Nếu không lấy được role, đăng xuất để an toàn
                         localStorage.removeItem("jwt");
                         localStorage.removeItem("role");
                         setIsAuthenticated(false);
@@ -91,7 +108,9 @@ const Header: React.FC<{ userRole: string }> = ({ userRole }) => {
     const [current, setCurrent] = useState("home");
     const navigate = useNavigate();
     const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("jwt"));
-    const [isModalVisible, setIsModalVisible] = useState(false);
+    const [isChangePasswordModalVisible, setIsChangePasswordModalVisible] = useState(false);
+    const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
+    const [profileData, setProfileData] = useState<UserProfile | null>(null);
     const [form] = Form.useForm();
 
     const onClick: MenuProps["onClick"] = (e) => {
@@ -100,7 +119,7 @@ const Header: React.FC<{ userRole: string }> = ({ userRole }) => {
 
     const handleLogout = () => {
         localStorage.removeItem("jwt");
-        localStorage.removeItem("role"); // Xóa role khi đăng xuất
+        localStorage.removeItem("role");
         setIsLoggedIn(false);
         message.success("Logout Success");
         navigate("/login");
@@ -140,7 +159,7 @@ const Header: React.FC<{ userRole: string }> = ({ userRole }) => {
                 description: responseText || "Your password has been changed successfully.",
             });
 
-            setIsModalVisible(false);
+            setIsChangePasswordModalVisible(false);
             form.resetFields();
             handleLogout();
         } catch (error) {
@@ -151,9 +170,42 @@ const Header: React.FC<{ userRole: string }> = ({ userRole }) => {
         }
     };
 
+    const handleViewProfile = async () => {
+        try {
+            const jwt = localStorage.getItem("jwt");
+            if (!jwt) {
+                throw new Error("No JWT found. Please log in again.");
+            }
+
+            const res = await fetch("http://localhost:5000/api/users/profile", {
+                headers: {
+                    Authorization: `Bearer ${jwt}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.message || `HTTP error! Status: ${res.status}`);
+            }
+
+            const data = await res.json();
+            setProfileData(data);
+            setIsProfileModalVisible(true);
+        } catch (error) {
+            notification.error({
+                message: "Error fetching profile",
+                description: error.message || "An unexpected error occurred.",
+            });
+        }
+    };
+
     const dropdownMenu = (
         <Menu>
-            <Menu.Item key="change-password" onClick={() => setIsModalVisible(true)}>
+            <Menu.Item key="profile" onClick={handleViewProfile}>
+                Profile
+            </Menu.Item>
+            <Menu.Item key="change-password" onClick={() => setIsChangePasswordModalVisible(true)}>
                 Change Password
             </Menu.Item>
             <Menu.Item key="logout" onClick={handleLogout}>
@@ -162,7 +214,6 @@ const Header: React.FC<{ userRole: string }> = ({ userRole }) => {
         </Menu>
     );
 
-    // Chỉ hiển thị các mục "Manage" nếu user có role là ROLE_ADMIN
     const items: MenuProps["items"] = [
         {
             label: <Link to={"/"}>Home</Link>,
@@ -221,9 +272,9 @@ const Header: React.FC<{ userRole: string }> = ({ userRole }) => {
 
             <Modal
                 title="Change Password"
-                visible={isModalVisible}
+                visible={isChangePasswordModalVisible}
                 onCancel={() => {
-                    setIsModalVisible(false);
+                    setIsChangePasswordModalVisible(false);
                     form.resetFields();
                 }}
                 footer={null}
@@ -249,6 +300,45 @@ const Header: React.FC<{ userRole: string }> = ({ userRole }) => {
                         </Button>
                     </Form.Item>
                 </Form>
+            </Modal>
+
+            <Modal
+                title="User Profile"
+                visible={isProfileModalVisible}
+                onCancel={() => setIsProfileModalVisible(false)}
+                footer={[
+                    <Button key="close" onClick={() => setIsProfileModalVisible(false)}>
+                        Close
+                    </Button>,
+                ]}
+            >
+                {profileData ? (
+                    <Descriptions column={1} bordered>
+                        <Descriptions.Item label="ID">{profileData.id}</Descriptions.Item>
+                        <Descriptions.Item label="Full Name">{profileData.fullName}</Descriptions.Item>
+                        <Descriptions.Item label="Email">{profileData.email}</Descriptions.Item>
+                        <Descriptions.Item label="Mobile">{profileData.mobile}</Descriptions.Item>
+                        <Descriptions.Item label="Role">{profileData.role}</Descriptions.Item>
+                        <Descriptions.Item label="Referral Code">{profileData.referralCode}</Descriptions.Item>
+                        <Descriptions.Item label="Referred By">{profileData.referredBy || "N/A"}</Descriptions.Item>
+                        <Descriptions.Item label="Referral Count">{profileData.referralCount}</Descriptions.Item>
+                        <Descriptions.Item label="Verified">
+                            {profileData.verified ? (
+                                <CheckCircleOutlined style={{ color: "green", fontSize: "20px" }} />
+                            ) : (
+                                <CloseCircleOutlined style={{ color: "red", fontSize: "20px" }} />
+                            )}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Two-Factor Auth">
+                            {profileData.twoFactorAuth.enable ? `Enabled (Send to: ${profileData.twoFactorAuth.sendTo})` : "Disabled"}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Avatar">
+                            <img src={profileData.avatar} alt="Avatar" style={{ width: 100, height: 100 }} />
+                        </Descriptions.Item>
+                    </Descriptions>
+                ) : (
+                    <p>Loading profile data...</p>
+                )}
             </Modal>
         </div>
     );
@@ -279,6 +369,14 @@ const router = createBrowserRouter([
             {
                 path: "withdrawals",
                 element: <WithdrawalsPage />,
+            },
+            {
+                path: "users/:userId/wallet-transactions", // Route mới
+                element: <UserWalletTransactionTable />,
+            },
+            {
+                path: "users/:userId/wallet", // New route for UserWallet
+                element: <UserWalletDisplay />,
             },
         ],
     },

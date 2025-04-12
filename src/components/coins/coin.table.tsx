@@ -30,22 +30,22 @@ const CoinsTable = () => {
     const [dataUpdate, setDataUpdate] = useState<null | ICoins>(null);
     const [meta, setMeta] = useState({
         current: 1,
-        pageSize: 5,
-        pages: 0,
+        pageSize: 10, // Fixed pageSize to 10
         total: 0,
     });
     const access_token = localStorage.getItem("jwt") as string;
 
+    // Fetch data on initial load only
     useEffect(() => {
         console.log("Check useEffect");
-        getData();
-    }, []);
+        getData(1); // Fetch the first page on initial load
+    }, []); // Empty dependency array to run only once on mount
 
-    const getData = async (page = 1) => {
+    const getData = async (page: number) => {
         try {
-            // Fetch the list of coins
+            // Fetch the list of coins with pagination
             const res = await fetch(
-                `http://localhost:5000/api/coins?page=${page - 1}`,
+                `http://localhost:5000/api/coins?page=${page - 1}&size=${meta.pageSize}`,
                 {
                     headers: {
                         Authorization: `Bearer ${access_token}`,
@@ -69,7 +69,7 @@ const CoinsTable = () => {
                     coinsData.map(async (coin: ICoins) => {
                         try {
                             const assetRes = await fetch(
-                                `http://localhost:5000/api/asset`,
+                                `http://localhost:5000/api/asset/admin`,
                                 {
                                     headers: {
                                         Authorization: `Bearer ${access_token}`,
@@ -101,19 +101,21 @@ const CoinsTable = () => {
                 );
 
                 setListCoins(coinsWithQuantity);
-                const assumedPageSize = coinsWithQuantity.length || 5;
-                setMeta({
+                setMeta((prev) => ({
+                    ...prev,
                     current: page,
-                    pageSize: assumedPageSize,
-                    pages: coinsWithQuantity.length > 0 ? page + 1 : page,
-                    total: coinsWithQuantity.length > 0 ? (page - 1) * assumedPageSize + coinsWithQuantity.length : 0,
-                });
+                    total: coinsWithQuantity.length === meta.pageSize ? prev.total + meta.pageSize : prev.total,
+                }));
             } else {
                 notification.error({
                     message: "No coins found",
                     description: JSON.stringify(coinsData.message || "Unknown error"),
                 });
                 setListCoins([]);
+                setMeta((prev) => ({
+                    ...prev,
+                    total: 0,
+                }));
             }
         } catch (error) {
             console.error("Error fetching coins:", error);
@@ -122,6 +124,10 @@ const CoinsTable = () => {
                 description: error.message,
             });
             setListCoins([]);
+            setMeta((prev) => ({
+                ...prev,
+                total: 0,
+            }));
         }
     };
 
@@ -163,12 +169,11 @@ const CoinsTable = () => {
         }
     };
 
-    const handleOnChange = async (page: number, pageSize: number) => {
-        await getData(page);
+    const handleOnChange = async (page: number) => {
+        await getData(page); // Fetch data for the new page
         setMeta((prev) => ({
             ...prev,
             current: page,
-            pageSize: pageSize,
         }));
     };
 
@@ -304,10 +309,13 @@ const CoinsTable = () => {
                     total: meta.total,
                     showTotal: (total, range) =>
                         `${range[0]}-${range[1]} of ${total} items`,
-                    onChange: (page: number, pageSize: number) => {
-                        handleOnChange(page, pageSize);
+                    onChange: (page: number) => {
+                        handleOnChange(page);
                     },
-                    showSizeChanger: true,
+                    showSizeChanger: false, // Disable page size changer
+                    disabled: listCoins.length === 0, // Disable pagination if no data
+                    nextIcon: listCoins.length === meta.pageSize ? undefined : null, // Disable "Next" if less than 10 records
+                    prevIcon: meta.current === 1 ? null : undefined, // Disable "Prev" if on first page
                 }}
             />
 

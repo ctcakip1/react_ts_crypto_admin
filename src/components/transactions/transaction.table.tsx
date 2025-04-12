@@ -31,7 +31,15 @@ const TransactionTable = () => {
     const [filters, setFilters] = useState({
         start_date: "",
         end_date: "",
-        transaction_type: [] as string[],
+        transaction_type: [
+            "WITHDRAWAL",
+            "WALLET_TRANSFER",
+            "ADD_MONEY",
+            "BUY_ASSET",
+            "SELL_ASSET",
+            "INTRODUCTORY_GIFT",
+        ] as string[],
+        days: undefined as number | undefined, // Add days filter
     });
 
     const access_token = localStorage.getItem("jwt") as string;
@@ -51,6 +59,7 @@ const TransactionTable = () => {
             if (filters.transaction_type.length > 0) {
                 queryParams.append("transaction_type", filters.transaction_type.join(","));
             }
+            if (filters.days !== undefined) queryParams.append("days", filters.days.toString()); // Add days to query
 
             const res = await fetch(
                 `http://localhost:5000/api/history/admin/transaction?${queryParams.toString()}`,
@@ -93,8 +102,7 @@ const TransactionTable = () => {
         } catch (error) {
             console.error("Error fetching transactions:", error);
             notification.error({
-                message: "Error fetching transactions",
-                description: error.message,
+                message: "You do not have permission to access this endpoint.",
             });
             setListTransactions([]);
             setMeta((prev) => ({
@@ -128,6 +136,18 @@ const TransactionTable = () => {
         setFilters((prev) => ({
             ...prev,
             transaction_type: value,
+        }));
+        setMeta((prev) => ({
+            ...prev,
+            current: 1, // Reset to page 1 when filters change
+            total: 0, // Reset total when filters change
+        }));
+    };
+
+    const handleDaysChange = (days: number | undefined) => {
+        setFilters((prev) => ({
+            ...prev,
+            days: days,
         }));
         setMeta((prev) => ({
             ...prev,
@@ -224,6 +244,22 @@ const TransactionTable = () => {
             </div>
 
             <Space style={{ marginBottom: 16 }}>
+                <div>
+                    <label style={{ marginRight: 8 }}>Days:</label>
+                    <Select
+                        style={{ width: 120 }}
+                        placeholder="Select days"
+                        onChange={(value: number | undefined) => handleDaysChange(value)}
+                        allowClear
+                        value={filters.days}
+                    >
+                        {[1, 2, 3, 4, 5, 6, 7, 14, 30].map((day) => (
+                            <Option key={day} value={day}>
+                                {day} day{day > 1 ? "s" : ""}
+                            </Option>
+                        ))}
+                    </Select>
+                </div>
                 <div>
                     <label style={{ marginRight: 8 }}>Date Range:</label>
                     <RangePicker

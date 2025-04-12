@@ -88,8 +88,7 @@ const UsersTable = () => {
         } catch (error) {
             console.error("Error fetching users:", error);
             notification.error({
-                message: "Error fetching users",
-                description: error.message,
+                message: "You do not have permission to access this endpoint.",
             });
         }
     };

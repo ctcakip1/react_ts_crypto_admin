@@ -1,6 +1,6 @@
-import { Button, message, notification, Popconfirm, Table, TableProps } from "antd";
+import { Button, message, notification, Popconfirm, Table, TableProps, Spin } from "antd";
 import { PlusCircleOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import UpdateCoinModal from "./update.user.modal";
 import CreateCoinModal from "./create.table.modal";
 
@@ -30,22 +30,27 @@ const CoinsTable = () => {
     const [dataUpdate, setDataUpdate] = useState<null | ICoins>(null);
     const [meta, setMeta] = useState({
         current: 1,
-        pageSize: 10, // Fixed pageSize to 10
+        pageSize: 10,
         total: 0,
     });
-    const access_token = localStorage.getItem("jwt") as string;
+    const [isLoading, setIsLoading] = useState(false); // Trạng thái loading
+    const access_token = localStorage.getItem("jwt") || "";
 
-    // Fetch data on initial load only
+    // Cache dữ liệu assets
+    const [assetsCache, setAssetsCache] = useState<Record<string, number>>({});
+
     useEffect(() => {
         console.log("Check useEffect");
-        getData(1); // Fetch the first page on initial load
-    }, []); // Empty dependency array to run only once on mount
+        getData(meta.current);
+    }, []);
 
     const getData = async (page: number) => {
+        setIsLoading(true);
+        const validPage = Math.max(1, Math.floor(Number(page) || 1));
         try {
-            // Fetch the list of coins with pagination
+            // Gọi API lấy danh sách coins
             const res = await fetch(
-                `http://localhost:5000/api/coins?page=${page - 1}&size=${meta.pageSize}`,
+                `http://localhost:5000/api/coins?page=${validPage - 1}&size=${meta.pageSize}`,
                 {
                     headers: {
                         Authorization: `Bearer ${access_token}`,
@@ -64,58 +69,58 @@ const CoinsTable = () => {
             console.log("API response (coins):", coinsData);
 
             if (Array.isArray(coinsData)) {
-                // Fetch quantity for each coin using GET /api/asset
-                const coinsWithQuantity = await Promise.all(
-                    coinsData.map(async (coin: ICoins) => {
-                        try {
-                            const assetRes = await fetch(
-                                `http://localhost:5000/api/asset/admin`,
-                                {
-                                    headers: {
-                                        Authorization: `Bearer ${access_token}`,
-                                        "Content-Type": "application/json",
-                                    },
-                                }
-                            );
-
-                            if (!assetRes.ok) {
-                                throw new Error(`HTTP error! Status: ${assetRes.status}`);
-                            }
-
-                            const assetData = await assetRes.json();
-
-                            // Find the asset that matches the coin's symbol
-                            const matchingAsset = Array.isArray(assetData)
-                                ? assetData.find((asset: any) => asset.coinDTO.symbol === coin.symbol)
-                                : null;
-
-                            return {
-                                ...coin,
-                                quantity: matchingAsset ? matchingAsset.quantity : 0,
-                            };
-                        } catch (error) {
-                            console.error(`Error fetching quantity for ${coin.symbol}:`, error);
-                            return { ...coin, quantity: 0 }; // Default to 0 if fetch fails
+                // Gọi API lấy assets một lần duy nhất
+                let updatedAssetsCache = { ...assetsCache };
+                if (!Object.keys(assetsCache).length) {
+                    const assetRes = await fetch(
+                        `http://localhost:5000/api/asset/admin`,
+                        {
+                            headers: {
+                                Authorization: `Bearer ${access_token}`,
+                                "Content-Type": "application/json",
+                            },
                         }
-                    })
-                );
+                    );
+
+                    if (!assetRes.ok) {
+                        throw new Error(`HTTP error! Status: ${assetRes.status}`);
+                    }
+
+                    const assetData = await assetRes.json();
+                    if (Array.isArray(assetData)) {
+                        updatedAssetsCache = assetData.reduce((acc: Record<string, number>, asset: any) => {
+                            if (asset.coinDTO?.symbol) {
+                                acc[asset.coinDTO.symbol] = asset.quantity || 0;
+                            }
+                            return acc;
+                        }, {});
+                        setAssetsCache(updatedAssetsCache);
+                    }
+                }
+
+                // Gắn quantity từ cache
+                const coinsWithQuantity = coinsData.map((coin: ICoins) => ({
+                    ...coin,
+                    quantity: updatedAssetsCache[coin.symbol] ?? 0,
+                }));
 
                 setListCoins(coinsWithQuantity);
-                setMeta((prev) => ({
-                    ...prev,
-                    current: page,
-                    total: coinsWithQuantity.length === meta.pageSize ? prev.total + meta.pageSize : prev.total,
-                }));
+                setMeta({
+                    current: validPage,
+                    pageSize: meta.pageSize,
+                    total: coinsData.length === meta.pageSize ? (validPage * meta.pageSize) : coinsData.length,
+                });
             } else {
                 notification.error({
                     message: "No coins found",
                     description: JSON.stringify(coinsData.message || "Unknown error"),
                 });
                 setListCoins([]);
-                setMeta((prev) => ({
-                    ...prev,
+                setMeta({
+                    current: validPage,
+                    pageSize: meta.pageSize,
                     total: 0,
-                }));
+                });
             }
         } catch (error) {
             console.error("Error fetching coins:", error);
@@ -124,10 +129,13 @@ const CoinsTable = () => {
                 description: error.message,
             });
             setListCoins([]);
-            setMeta((prev) => ({
-                ...prev,
+            setMeta({
+                current: validPage,
+                pageSize: meta.pageSize,
                 total: 0,
-            }));
+            });
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -170,11 +178,7 @@ const CoinsTable = () => {
     };
 
     const handleOnChange = async (page: number) => {
-        await getData(page); // Fetch data for the new page
-        setMeta((prev) => ({
-            ...prev,
-            current: page,
-        }));
+        await getData(page);
     };
 
     const columns: TableProps<ICoins>["columns"] = [
@@ -299,25 +303,29 @@ const CoinsTable = () => {
                 </div>
             </div>
 
-            <Table
-                columns={columns}
-                dataSource={listCoins}
-                rowKey={"id"}
-                pagination={{
-                    current: meta.current,
-                    pageSize: meta.pageSize,
-                    total: meta.total,
-                    showTotal: (total, range) =>
-                        `${range[0]}-${range[1]} of ${total} items`,
-                    onChange: (page: number) => {
-                        handleOnChange(page);
-                    },
-                    showSizeChanger: false, // Disable page size changer
-                    disabled: listCoins.length === 0, // Disable pagination if no data
-                    nextIcon: listCoins.length === meta.pageSize ? undefined : null, // Disable "Next" if less than 10 records
-                    prevIcon: meta.current === 1 ? null : undefined, // Disable "Prev" if on first page
-                }}
-            />
+            {isLoading ? (
+                <Spin tip="Loading coins..." size="large" style={{ display: "block", margin: "50px auto" }} />
+            ) : (
+                <Table
+                    columns={columns}
+                    dataSource={listCoins}
+                    rowKey={"id"}
+                    pagination={{
+                        current: meta.current,
+                        pageSize: meta.pageSize,
+                        total: meta.total,
+                        showTotal: (total, range) =>
+                            `${range[0]}-${range[1]} of ${total} items`,
+                        onChange: (page: number) => {
+                            handleOnChange(page);
+                        },
+                        showSizeChanger: false,
+                        disabled: listCoins.length === 0,
+                        nextIcon: listCoins.length === meta.pageSize ? undefined : null,
+                        prevIcon: meta.current === 1 ? null : undefined,
+                    }}
+                />
+            )}
 
             <CreateCoinModal
                 access_token={access_token}

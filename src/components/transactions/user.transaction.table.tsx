@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { notification, Table, TableProps, Select, Space } from "antd";
+import { notification, Table, TableProps, Select, Space, Spin } from "antd";
 import { Button } from "antd";
 import { ArrowLeftOutlined } from "@ant-design/icons";
 
 const { Option } = Select;
 
-// Define the interface for transactions (same as TransactionTable)
 export interface ITransaction {
     id: string;
     wallet: {
@@ -23,28 +22,38 @@ export interface ITransaction {
 }
 
 const UserWalletTransactionTable = () => {
-    const { userId } = useParams<{ userId: string }>(); // Get userId from URL
+    const { userId } = useParams<{ userId: string }>();
     const navigate = useNavigate();
     const [listTransactions, setListTransactions] = useState<ITransaction[]>([]);
     const [meta, setMeta] = useState({
         current: 1,
-        pageSize: 15, // Fixed pageSize to 15
+        pageSize: 15,
         total: 0,
     });
     const [filters, setFilters] = useState({
-        transaction_type: undefined as string | undefined, // Start with no transaction type selected
+        transaction_type: undefined as string | undefined,
         days: undefined as number | undefined,
     });
-
-    const access_token = localStorage.getItem("jwt") as string;
+    const [isLoading, setIsLoading] = useState(false); // Thêm loading state
+    const access_token = localStorage.getItem("jwt") || "";
 
     useEffect(() => {
-        getData();
-    }, [filters, meta.current, userId]); // Re-fetch when filters, current page, or userId changes
+        if (userId) {
+            getData();
+        }
+    }, [filters, meta.current, userId]);
 
     const getData = async (page = meta.current) => {
+        if (!userId) {
+            notification.error({
+                message: "Invalid User ID",
+                description: "No user ID provided in the URL.",
+            });
+            return;
+        }
+
+        setIsLoading(true);
         try {
-            // Build query parameters for filtering
             const queryParams = new URLSearchParams();
             queryParams.append("page", (page - 1).toString());
             queryParams.append("size", meta.pageSize.toString());
@@ -76,32 +85,37 @@ const UserWalletTransactionTable = () => {
 
             if (Array.isArray(transactionsData)) {
                 setListTransactions(transactionsData);
-                setMeta((prev) => ({
-                    ...prev,
+                setMeta({
                     current: page,
-                    total: transactionsData.length === meta.pageSize ? prev.total + meta.pageSize : prev.total,
-                }));
+                    pageSize: meta.pageSize,
+                    total: transactionsData.length === meta.pageSize ? (page * meta.pageSize) : transactionsData.length,
+                });
             } else {
                 notification.error({
                     message: "No transactions found",
                     description: JSON.stringify(transactionsData.message || "Unknown error"),
                 });
                 setListTransactions([]);
-                setMeta((prev) => ({
-                    ...prev,
+                setMeta({
+                    current: page,
+                    pageSize: meta.pageSize,
                     total: 0,
-                }));
+                });
             }
         } catch (error) {
             console.error("Error fetching transactions:", error);
             notification.error({
-                message: "You do not have permission to access this endpoint.",
+                message: "Error fetching transactions",
+                description: error.message || "You may not have permission to access this endpoint.",
             });
             setListTransactions([]);
-            setMeta((prev) => ({
-                ...prev,
+            setMeta({
+                current: page,
+                pageSize: meta.pageSize,
                 total: 0,
-            }));
+            });
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -116,6 +130,7 @@ const UserWalletTransactionTable = () => {
         setFilters((prev) => ({
             ...prev,
             transaction_type: value,
+            days: undefined, // Reset days khi thay đổi transaction_type
         }));
         setMeta((prev) => ({
             ...prev,
@@ -128,6 +143,7 @@ const UserWalletTransactionTable = () => {
         setFilters((prev) => ({
             ...prev,
             days: days,
+            transaction_type: undefined, // Reset transaction_type khi thay đổi days
         }));
         setMeta((prev) => ({
             ...prev,
@@ -201,9 +217,21 @@ const UserWalletTransactionTable = () => {
             title: "Amount",
             dataIndex: "amount",
             key: "amount",
-            render: (amount: number) => (
-                <span style={{ color: amount >= 0 ? "green" : "red" }}>
-                    ${Math.abs(amount).toLocaleString()}
+            render: (amount: number, record: ITransaction) => (
+                <span
+                    style={{
+                        color:
+                            record.walletTransactionType === "BUY_ASSET"
+                                ? "red"
+                                : amount >= 0
+                                    ? "green"
+                                    : "red",
+                    }}
+                >
+                    {record.walletTransactionType === "BUY_ASSET"
+                        ? `-${Math.abs(amount).toLocaleString()}`
+                        : amount.toLocaleString()}{" "}
+                    USD
                 </span>
             ),
         },
@@ -249,7 +277,7 @@ const UserWalletTransactionTable = () => {
                 <div>
                     <label style={{ marginRight: 8 }}>Transaction Type:</label>
                     <Select
-                        style={{ width: 200 }} // Adjusted width for single selection
+                        style={{ width: 200 }}
                         placeholder="Select transaction type"
                         onChange={(value: string | undefined) => handleTransactionTypeChange(value)}
                         allowClear
@@ -265,25 +293,29 @@ const UserWalletTransactionTable = () => {
                 </div>
             </Space>
 
-            <Table
-                columns={columns}
-                dataSource={listTransactions}
-                rowKey={"id"}
-                pagination={{
-                    current: meta.current,
-                    pageSize: meta.pageSize,
-                    total: meta.total,
-                    showTotal: (total, range) =>
-                        `${range[0]}-${range[1]} of ${total} items`,
-                    onChange: (page: number) => {
-                        handleOnChange(page);
-                    },
-                    showSizeChanger: false,
-                    disabled: listTransactions.length === 0,
-                    nextIcon: listTransactions.length === meta.pageSize ? undefined : null,
-                    prevIcon: meta.current === 1 ? null : undefined,
-                }}
-            />
+            {isLoading ? (
+                <Spin tip="Loading transactions..." size="large" style={{ display: "block", margin: "50px auto" }} />
+            ) : (
+                <Table
+                    columns={columns}
+                    dataSource={listTransactions}
+                    rowKey={"id"}
+                    pagination={{
+                        current: meta.current,
+                        pageSize: meta.pageSize,
+                        total: meta.total,
+                        showTotal: (total, range) =>
+                            `${range[0]}-${range[1]} of ${total} items`,
+                        onChange: (page: number) => {
+                            handleOnChange(page);
+                        },
+                        showSizeChanger: false,
+                        disabled: listTransactions.length === 0,
+                        nextIcon: listTransactions.length === meta.pageSize ? undefined : null,
+                        prevIcon: meta.current === 1 ? null : undefined,
+                    }}
+                />
+            )}
         </div>
     );
 };

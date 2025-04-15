@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { notification, Table, TableProps, Select, Space } from "antd";
+import { notification, Table, TableProps, Select, Space, Spin } from "antd";
 import { DatePicker } from "antd";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
-// Define the interface for transactions based on the API response
 export interface ITransaction {
     id: string;
     wallet: {
@@ -25,7 +24,7 @@ const TransactionTable = () => {
     const [listTransactions, setListTransactions] = useState<ITransaction[]>([]);
     const [meta, setMeta] = useState({
         current: 1,
-        pageSize: 15, // Fixed page size to 15
+        pageSize: 15,
         total: 0,
     });
     const [filters, setFilters] = useState({
@@ -39,27 +38,27 @@ const TransactionTable = () => {
             "SELL_ASSET",
             "INTRODUCTORY_GIFT",
         ] as string[],
-        days: undefined as number | undefined, // Add days filter
+        days: undefined as number | undefined,
     });
-
-    const access_token = localStorage.getItem("jwt") as string;
+    const [isLoading, setIsLoading] = useState(false); // Thêm loading state
+    const access_token = localStorage.getItem("jwt") || "";
 
     useEffect(() => {
         getData();
-    }, [filters, meta.current]); // Re-fetch data when filters or current page change
+    }, [filters, meta.current]);
 
     const getData = async (page = meta.current) => {
+        setIsLoading(true);
         try {
-            // Build query parameters for filtering
             const queryParams = new URLSearchParams();
             queryParams.append("page", (page - 1).toString());
-            queryParams.append("size", meta.pageSize.toString()); // Send pageSize to API
+            queryParams.append("size", meta.pageSize.toString());
             if (filters.start_date) queryParams.append("start_date", filters.start_date);
             if (filters.end_date) queryParams.append("end_date", filters.end_date);
             if (filters.transaction_type.length > 0) {
                 queryParams.append("transaction_type", filters.transaction_type.join(","));
             }
-            if (filters.days !== undefined) queryParams.append("days", filters.days.toString()); // Add days to query
+            if (filters.days !== undefined) queryParams.append("days", filters.days.toString());
 
             const res = await fetch(
                 `http://localhost:5000/api/history/admin/transaction?${queryParams.toString()}`,
@@ -82,11 +81,10 @@ const TransactionTable = () => {
 
             if (Array.isArray(transactionsData)) {
                 setListTransactions(transactionsData);
-                // Calculate total based on the number of records
                 setMeta((prev) => ({
                     ...prev,
                     current: page,
-                    total: transactionsData.length === meta.pageSize ? prev.total + meta.pageSize : prev.total, // Estimate total
+                    total: transactionsData.length === meta.pageSize ? (page * meta.pageSize) : transactionsData.length,
                 }));
             } else {
                 notification.error({
@@ -96,6 +94,7 @@ const TransactionTable = () => {
                 setListTransactions([]);
                 setMeta((prev) => ({
                     ...prev,
+                    current: page,
                     total: 0,
                 }));
             }
@@ -107,8 +106,11 @@ const TransactionTable = () => {
             setListTransactions([]);
             setMeta((prev) => ({
                 ...prev,
+                current: page,
                 total: 0,
             }));
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -124,11 +126,12 @@ const TransactionTable = () => {
             ...prev,
             start_date: dateStrings[0],
             end_date: dateStrings[1],
+            days: undefined, // Reset days khi chọn date range
         }));
         setMeta((prev) => ({
             ...prev,
-            current: 1, // Reset to page 1 when filters change
-            total: 0, // Reset total when filters change
+            current: 1,
+            total: 0,
         }));
     };
 
@@ -139,8 +142,8 @@ const TransactionTable = () => {
         }));
         setMeta((prev) => ({
             ...prev,
-            current: 1, // Reset to page 1 when filters change
-            total: 0, // Reset total when filters change
+            current: 1,
+            total: 0,
         }));
     };
 
@@ -148,15 +151,16 @@ const TransactionTable = () => {
         setFilters((prev) => ({
             ...prev,
             days: days,
+            start_date: "", // Reset date range khi chọn days
+            end_date: "",
         }));
         setMeta((prev) => ({
             ...prev,
-            current: 1, // Reset to page 1 when filters change
-            total: 0, // Reset total when filters change
+            current: 1,
+            total: 0,
         }));
     };
 
-    // Function to format date using JavaScript's Date (only YYYY-MM-DD)
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
         return date
@@ -205,7 +209,7 @@ const TransactionTable = () => {
             title: "Date",
             dataIndex: "date",
             key: "date",
-            render: (date: string) => formatDate(date), // Only show YYYY-MM-DD
+            render: (date: string) => formatDate(date),
         },
         {
             title: "Transfer ID",
@@ -222,11 +226,23 @@ const TransactionTable = () => {
             title: "Amount",
             dataIndex: "amount",
             key: "amount",
-            render: (amount: number) => (
-                <span style={{ color: amount >= 0 ? "green" : "red" }}>
-                    ${Math.abs(amount).toLocaleString()}
+            render: (amount: number, record: ITransaction) => (
+                <span
+                    style={{
+                        color:
+                            record.walletTransactionType === "BUY_ASSET"
+                                ? "red"
+                                : amount >= 0
+                                    ? "green"
+                                    : "red",
+                    }}
+                >
+                    {record.walletTransactionType === "BUY_ASSET"
+                        ? `-${Math.abs(amount).toLocaleString()}`
+                        : amount.toLocaleString()}{" "}
+                    USD
                 </span>
-            ), // Remove "-" and color based on positive/negative
+            ),
         },
     ];
 
@@ -288,25 +304,29 @@ const TransactionTable = () => {
                 </div>
             </Space>
 
-            <Table
-                columns={columns}
-                dataSource={listTransactions}
-                rowKey={"id"}
-                pagination={{
-                    current: meta.current,
-                    pageSize: meta.pageSize,
-                    total: meta.total,
-                    showTotal: (total, range) =>
-                        `${range[0]}-${range[1]} of ${total} items`,
-                    onChange: (page: number) => {
-                        handleOnChange(page);
-                    },
-                    showSizeChanger: false, // Disable page size changer
-                    disabled: listTransactions.length === 0, // Disable pagination if no data
-                    nextIcon: listTransactions.length === meta.pageSize ? undefined : null, // Disable "Next" if less than 15 records
-                    prevIcon: meta.current === 1 ? null : undefined, // Disable "Prev" if on first page
-                }}
-            />
+            {isLoading ? (
+                <Spin tip="Loading transactions..." size="large" style={{ display: "block", margin: "50px auto" }} />
+            ) : (
+                <Table
+                    columns={columns}
+                    dataSource={listTransactions}
+                    rowKey={"id"}
+                    pagination={{
+                        current: meta.current,
+                        pageSize: meta.pageSize,
+                        total: meta.total,
+                        showTotal: (total, range) =>
+                            `${range[0]}-${range[1]} of ${total} items`,
+                        onChange: (page: number) => {
+                            handleOnChange(page);
+                        },
+                        showSizeChanger: false,
+                        disabled: listTransactions.length === 0,
+                        nextIcon: listTransactions.length === meta.pageSize ? undefined : null,
+                        prevIcon: meta.current === 1 ? null : undefined,
+                    }}
+                />
+            )}
         </div>
     );
 };

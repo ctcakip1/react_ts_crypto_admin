@@ -1,18 +1,8 @@
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App.tsx";
-import "./App.scss";
-import {
-    createBrowserRouter,
-    Outlet,
-    RouterProvider,
-    Link,
-    Navigate,
-    useNavigate,
-} from "react-router-dom";
-import UsersPage from "./screens/users.page.tsx";
-import { FireOutlined, SmileOutlined, SpotifyOutlined, UserOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
-import { Button, Dropdown, Form, Input, Menu, message, Modal, notification, type MenuProps, Descriptions } from "antd";
+import { createBrowserRouter, Outlet, RouterProvider, Link, Navigate, useNavigate } from "react-router-dom";
+import { UserOutlined, CheckCircleOutlined, CloseCircleOutlined, DollarOutlined, TransactionOutlined, ShoppingCartOutlined, BankOutlined, DashboardOutlined, FireOutlined, PlusCircleOutlined, StopOutlined } from "@ant-design/icons";
+import { Button, Dropdown, Form, Input, Menu, message, Modal, notification, Descriptions, type MenuProps } from "antd";
 import CoinsPage from "./screens/coins.page.tsx";
 import TransactionsPage from "./screens/transactions.page.tsx";
 import OrdersPage from "./screens/orders.page.tsx";
@@ -20,6 +10,11 @@ import LoginPage from "./screens/login.page.tsx";
 import WithdrawalsPage from "./screens/withdrawals.page.tsx";
 import UserWalletTransactionTable from "./components/transactions/user.transaction.table.tsx";
 import UserWalletDisplay from "./components/transactions/user.wallet.display.tsx";
+import TrendingCoinsPage from "./components/coins/trending.coin.table.tsx";
+import NewCoinsPage from "./components/coins/new.coin.table.tsx";
+import UsersPage from "./screens/users.page.tsx";
+import DashboardPage from "./screens/dashboard.page.tsx";
+import DelistedCoinsPage from "./components/coins/delisted.coin.table.tsx";
 
 // Định nghĩa interface cho dữ liệu profile
 interface UserProfile {
@@ -105,7 +100,7 @@ const LayoutAdmin = () => {
 };
 
 const Header: React.FC<{ userRole: string }> = ({ userRole }) => {
-    const [current, setCurrent] = useState("home");
+    const [current, setCurrent] = useState("dashboard");
     const navigate = useNavigate();
     const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem("jwt"));
     const [isChangePasswordModalVisible, setIsChangePasswordModalVisible] = useState(false);
@@ -216,36 +211,57 @@ const Header: React.FC<{ userRole: string }> = ({ userRole }) => {
 
     const items: MenuProps["items"] = [
         {
-            label: <Link to={"/"}>Home</Link>,
-            key: "home",
-            icon: <FireOutlined />,
+            label: <Link to={"/"}>Dashboard</Link>,
+            key: "dashboard",
+            icon: <DashboardOutlined />,
         },
         ...(userRole === "ROLE_ADMIN"
             ? [
                 {
                     label: <Link to={"/users"}>Manage Users</Link>,
                     key: "users",
-                    icon: <SmileOutlined />,
+                    icon: <UserOutlined />,
                 },
                 {
-                    label: <Link to={"/coins"}>Manage Coins</Link>,
+                    label: "Manage Coins",
                     key: "coins",
-                    icon: <SpotifyOutlined />,
+                    icon: <DollarOutlined />,
+                    children: [
+                        {
+                            label: <Link to={"/coins"}>All Coins</Link>,
+                            key: "all-coins",
+                        },
+                        {
+                            label: <Link to={"/trending-coins"}>Manage Trending Coins</Link>,
+                            key: "trending-coins",
+                            icon: <FireOutlined />,
+                        },
+                        {
+                            label: <Link to={"/new-coins"}>Manage New Coins</Link>,
+                            key: "new-coins",
+                            icon: <PlusCircleOutlined />,
+                        },
+                        {
+                            label: <Link to={"/delisted-coins"}>Manage Delisted Coins</Link>,
+                            key: "delisted-coins",
+                            icon: <StopOutlined />,
+                        },
+                    ],
                 },
                 {
                     label: <Link to={"/transactions"}>Manage Transactions</Link>,
                     key: "transactions",
-                    icon: <SpotifyOutlined />,
+                    icon: <TransactionOutlined />,
                 },
                 {
                     label: <Link to={"/orders"}>Manage Orders</Link>,
                     key: "orders",
-                    icon: <SpotifyOutlined />,
+                    icon: <ShoppingCartOutlined />,
                 },
                 {
                     label: <Link to={"/withdrawals"}>Manage Withdrawals</Link>,
                     key: "withdrawals",
-                    icon: <SpotifyOutlined />,
+                    icon: <BankOutlined />,
                 },
             ]
             : []),
@@ -349,7 +365,7 @@ const router = createBrowserRouter([
         path: "/",
         element: <LayoutAdmin />,
         children: [
-            { index: true, element: <App /> },
+            { index: true, element: <DashboardPage />, },
             {
                 path: "users",
                 element: <UsersPage />,
@@ -357,6 +373,18 @@ const router = createBrowserRouter([
             {
                 path: "coins",
                 element: <CoinsPage />,
+            },
+            {
+                path: "trending-coins",
+                element: <TrendingCoinsPage />,
+            },
+            {
+                path: "new-coins",
+                element: <NewCoinsPage />,
+            },
+            {
+                path: "delisted-coins",
+                element: <DelistedCoinsPage />,
             },
             {
                 path: "transactions",
@@ -371,11 +399,11 @@ const router = createBrowserRouter([
                 element: <WithdrawalsPage />,
             },
             {
-                path: "users/:userId/wallet-transactions", // Route mới
+                path: "users/:userId/wallet-transactions",
                 element: <UserWalletTransactionTable />,
             },
             {
-                path: "users/:userId/wallet", // New route for UserWallet
+                path: "users/:userId/wallet",
                 element: <UserWalletDisplay />,
             },
         ],

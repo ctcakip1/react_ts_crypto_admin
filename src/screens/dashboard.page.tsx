@@ -1,27 +1,36 @@
 import React, { useState, useEffect } from "react";
 import { Select, message, DatePicker } from "antd";
-import dayjs from "dayjs"; // For date formatting
+import dayjs from "dayjs";
 import SummaryCards from "../components/charts/SummaryCards";
+import DailyVolumeChart from "../components/charts/DailyVolumeChart";
+import MonthlyVolumeChart from "../components/charts/MonthlyVolumeChart";
+import "../styles/dashboardPage.scss";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
 // Define interfaces for TypeScript
-type ApiResponse = number; // API returns a plain number
+type ApiResponse = number;
 
 interface DaysOption {
     value: number;
     label: string;
 }
 
+interface MonthsOption {
+    value: number;
+    label: string;
+}
+
 const DashboardPage: React.FC = () => {
-    const [days, setDays] = useState<number | null>(null); // Initialize as null
-    const [transactionTypes, setTransactionTypes] = useState<string[]>([]); // Default to no filter
+    const [days, setDays] = useState<number | null>(null);
+    const [months, setMonths] = useState<number | null>(null); // New state for months
+    const [transactionTypes, setTransactionTypes] = useState<string[]>([]);
     const [totalTransactions, setTotalTransactions] = useState<number>(0);
+    const [totalByRange, setTotalByRange] = useState<number>(0);
     const [customerFees, setCustomerFees] = useState<number>(0);
-    const [totalByRange, setTotalByRange] = useState<number>(0); // New state for date range total
     const [loading, setLoading] = useState<boolean>(false);
-    const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null); // For startDate and endDate
+    const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
 
     // Transaction type options
     const transactionTypeOptions: string[] = [
@@ -33,7 +42,7 @@ const DashboardPage: React.FC = () => {
         "INTRODUCTORY_GIFT",
     ];
 
-    // Days options (0 = Today, 1 = Yesterday, etc.)
+    // Days options
     const daysOptions: DaysOption[] = [
         { value: 0, label: "Today" },
         { value: 1, label: "Yesterday" },
@@ -44,13 +53,19 @@ const DashboardPage: React.FC = () => {
         { value: 6, label: "6 Days Ago" },
     ];
 
+    // Months options (1 to 12 months)
+    const monthsOptions: MonthsOption[] = Array.from({ length: 12 }, (_, i) => ({
+        value: i + 1,
+        label: `${i + 1} Month${i + 1 > 1 ? "s" : ""}`,
+    }));
+
     // Fetch total transactions (by days)
     const fetchTotalTransactions = async (): Promise<void> => {
-        if (dateRange || days == null) return; // Skip if date range is selected or days is null/undefined
+        if (dateRange || days == null) return;
         setLoading(true);
         try {
             const params = new URLSearchParams();
-            params.append("days", days.toString()); // days is guaranteed to be a number here
+            params.append("days", days.toString());
             if (transactionTypes.length > 0) {
                 params.append("transaction_type", transactionTypes.join(","));
             }
@@ -89,7 +104,7 @@ const DashboardPage: React.FC = () => {
 
     // Fetch fees collected from customers
     const fetchCustomerFees = async (): Promise<void> => {
-        if (days == null && !dateRange) return; // Skip if days is null/undefined and no date range
+        if (days == null && !dateRange) return;
         setLoading(true);
         try {
             const params = new URLSearchParams();
@@ -193,25 +208,28 @@ const DashboardPage: React.FC = () => {
     const handleDateRangeChange = (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
         setDateRange(dates);
         if (dates) {
-            setDays(null); // Clear days filter when a date range is selected
+            setDays(null);
         }
         if (!dates) {
-            // Reset all metrics when date range is cleared
             setTotalTransactions(0);
             setCustomerFees(0);
             setTotalByRange(0);
         }
     };
 
-    // Handle days change, ensuring undefined is converted to null
+    // Handle days change
     const handleDaysChange = (value: number | undefined) => {
-        setDays(value ?? null); // Convert undefined to null
+        setDays(value ?? null);
         if (value == null) {
-            // Reset all metrics when days is cleared
             setTotalTransactions(0);
             setCustomerFees(0);
             setTotalByRange(0);
         }
+    };
+
+    // Handle months change
+    const handleMonthsChange = (value: number | undefined) => {
+        setMonths(value ?? null);
     };
 
     // Prepare data for SummaryCards
@@ -222,18 +240,18 @@ const DashboardPage: React.FC = () => {
     };
 
     return (
-        <div className="p-6 max-w-7xl mx-auto">
+        <div className="dashboard-page">
             {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <div className="flex flex-col w-full sm:w-1/4">
-                    <label className="text-sm font-medium text-gray-700 mb-1">Select Days</label>
+            <div className="filters">
+                <div className="filter-item">
+                    <label className="filter-label">Select Days</label>
                     <Select
-                        value={days ?? undefined} // Use undefined for placeholder when null
-                        onChange={handleDaysChange} // Use new handler
+                        value={days ?? undefined}
+                        onChange={handleDaysChange}
                         placeholder="Select days"
                         className="w-full"
-                        disabled={!!dateRange} // Disable when date range is selected
-                        allowClear // Allow clearing the selection
+                        disabled={!!dateRange}
+                        allowClear
                     >
                         {daysOptions.map((option) => (
                             <Option key={option.value} value={option.value}>
@@ -243,8 +261,8 @@ const DashboardPage: React.FC = () => {
                     </Select>
                 </div>
 
-                <div className="flex flex-col w-full sm:w-1/4">
-                    <label className="text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
+                <div className="filter-item">
+                    <label className="filter-label">Transaction Type</label>
                     <Select
                         mode="multiple"
                         value={transactionTypes}
@@ -261,8 +279,8 @@ const DashboardPage: React.FC = () => {
                     </Select>
                 </div>
 
-                <div className="flex flex-col w-full sm:w-1/4">
-                    <label className="text-sm font-medium text-gray-700 mb-1">Select Date Range</label>
+                <div className="filter-item">
+                    <label className="filter-label">Select Date Range</label>
                     <RangePicker
                         value={dateRange}
                         onChange={handleDateRangeChange}
@@ -271,11 +289,34 @@ const DashboardPage: React.FC = () => {
                         allowClear
                     />
                 </div>
+
+                <div className="filter-item">
+                    <label className="filter-label">Select Months</label>
+                    <Select
+                        value={months ?? undefined}
+                        onChange={handleMonthsChange}
+                        placeholder="Select months"
+                        className="w-full"
+                        allowClear
+                    >
+                        {monthsOptions.map((option) => (
+                            <Option key={option.value} value={option.value}>
+                                {option.label}
+                            </Option>
+                        ))}
+                    </Select>
+                </div>
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="summary-cards">
                 <SummaryCards data={summaryData} loading={loading} />
+            </div>
+
+            {/* Charts Section */}
+            <div className="charts-section">
+                <DailyVolumeChart days={days} dateRange={dateRange} transactionTypes={transactionTypes} />
+                <MonthlyVolumeChart transactionTypes={transactionTypes} months={months} />
             </div>
         </div>
     );

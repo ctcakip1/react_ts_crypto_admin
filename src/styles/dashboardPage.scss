@@ -164,3 +164,54 @@
 .text-muted {
     color: #6b7280;
 }
+
+// Styles for TransactionTable (using antd Table)
+.transaction-table-container {
+    width: 100%;
+    margin-top: 24px;
+
+    .ant-table {
+        background: #fff;
+        border-radius: 8px;
+        overflow: hidden;
+
+        .ant-table-thead {
+            tr {
+                th {
+                    background: #f9fafb;
+                    color: #1f2937;
+                    font-weight: 600;
+                    font-size: 14px;
+                    padding: 12px;
+                    white-space: nowrap;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+            }
+        }
+
+        .ant-table-tbody {
+            tr {
+                td {
+                    color: #4b5563;
+                    font-size: 14px;
+                    padding: 12px;
+                    white-space: nowrap;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+
+                &:hover {
+                    td {
+                        background: #f9fafb;
+                    }
+                }
+            }
+        }
+
+        .ant-table-placeholder {
+            .ant-table-cell {
+                padding: 24px;
+                text-align: center;
+            }
+        }
+    }
+}

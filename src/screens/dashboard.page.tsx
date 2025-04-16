@@ -5,8 +5,9 @@ import SummaryCards from "../components/charts/SummaryCards";
 import DailyVolumeChart from "../components/charts/DailyVolumeChart";
 import MonthlyVolumeChart from "../components/charts/MonthlyVolumeChart";
 import DailyFeeTransactionChart from "../components/charts/DailyFeeTransactionChart";
-import "../styles/dashboardPage.scss";
 import MonthlyFeeTransactionChart from "../components/charts/MonthlyFeeTransactionChart";
+import "../styles/dashboardPage.scss";
+import TransactionTable from "../components/charts/TransactionTable";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -45,14 +46,14 @@ const DashboardPage: React.FC = () => {
         "INTRODUCTORY_GIFT",
     ];
 
-    // Days options
+    // Days options (fixed duplicate entry for value: 4)
     const daysOptions: DaysOption[] = [
         { value: 0, label: "Today" },
         { value: 1, label: "Yesterday" },
         { value: 2, label: "2 Days Ago" },
         { value: 3, label: "3 Days Ago" },
         { value: 4, label: "4 Days Ago" },
-        { value: 4, label: "5 Days Ago" },
+        { value: 5, label: "5 Days Ago" },
         { value: 6, label: "6 Days Ago" },
     ];
 
@@ -376,14 +377,14 @@ const DashboardPage: React.FC = () => {
             <div className="charts-section">
                 <DailyVolumeChart days={days} dateRange={dateRange} transactionTypes={transactionTypes} />
                 <MonthlyVolumeChart transactionTypes={transactionTypes} months={months} />
-
             </div>
             <div className="charts-section">
                 <DailyFeeTransactionChart days={days} dateRange={dateRange} transactionTypes={transactionTypes} />
                 <MonthlyFeeTransactionChart transactionTypes={transactionTypes} months={months} />
-
             </div>
 
+            {/* Transaction Table */}
+            <TransactionTable days={days} dateRange={dateRange} transactionTypes={transactionTypes} />
         </div>
     );
 };

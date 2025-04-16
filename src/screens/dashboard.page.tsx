@@ -1,408 +1,282 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Row, Alert } from 'antd';
-import moment from 'moment';
-import '../styles/dashboardPage.scss';
-import { SummaryData, Transaction, VolumeData } from '../types/backend';
-import Filters from '../components/charts/Filters';
-import SummaryCards from '../components/charts/SummaryCards';
-import DailyVolumeChart from '../components/charts/DailyVolumeChart';
-import MonthlyVolumeChart from '../components/charts/MonthlyVolumeChart';
-import TransactionTable from '../components/charts/TransactionTable';
+import React, { useState, useEffect } from "react";
+import { Select, message, DatePicker } from "antd";
+import dayjs from "dayjs"; // For date formatting
+import SummaryCards from "../components/charts/SummaryCards";
 
-const API_BASE_URL = 'http://localhost:5000';
-const jwt = localStorage.getItem("jwt");
+const { Option } = Select;
+const { RangePicker } = DatePicker;
+
+// Define interfaces for TypeScript
+type ApiResponse = number; // API returns a plain number
+
+interface DaysOption {
+    value: number;
+    label: string;
+}
 
 const DashboardPage: React.FC = () => {
-    const [transactionTypes, setTransactionTypes] = useState<string[]>([]);
-    const [startDate, setStartDate] = useState<string>('');
-    const [endDate, setEndDate] = useState<string>('');
-    const [days, setDays] = useState<number>(0); // 0 = today, 1 = yesterday, etc.
-    const [months, setMonths] = useState<number>(0); // 0 = this month, 1 = last month, etc.
-    const [searchUser, setSearchUser] = useState<string>('');
-    const [summaryData, setSummaryData] = useState<SummaryData>({
-        totalToday: 0,
-        totalRange: 0,
-        customerFees: 0,
-        transactionCount: 0,
-    });
-    const [dailyVolume, setDailyVolume] = useState<VolumeData[]>([]);
-    const [monthlyVolume, setMonthlyVolume] = useState<VolumeData[]>([]);
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [error, setError] = useState<string | null>(null);
+    const [days, setDays] = useState<number | null>(null); // Initialize as null
+    const [transactionTypes, setTransactionTypes] = useState<string[]>([]); // Default to no filter
+    const [totalTransactions, setTotalTransactions] = useState<number>(0);
+    const [customerFees, setCustomerFees] = useState<number>(0);
+    const [totalByRange, setTotalByRange] = useState<number>(0); // New state for date range total
+    const [loading, setLoading] = useState<boolean>(false);
+    const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null); // For startDate and endDate
 
-    const allTransactionTypes: string[] = [
-        'WITHDRAWAL',
-        'WALLET_TRANSFER',
-        'ADD_MONEY',
-        'BUY_ASSET',
-        'SELL_ASSET',
-        'INTRODUCTORY_GIFT',
+    // Transaction type options
+    const transactionTypeOptions: string[] = [
+        "WITHDRAWAL",
+        "WALLET_TRANSFER",
+        "ADD_MONEY",
+        "BUY_ASSET",
+        "SELL_ASSET",
+        "INTRODUCTORY_GIFT",
     ];
 
-    const validateJwt = useCallback(() => {
-        if (!jwt) {
-            setError('No authentication token found. Please log in.');
-            return false;
-        }
+    // Days options (0 = Today, 1 = Yesterday, etc.)
+    const daysOptions: DaysOption[] = [
+        { value: 0, label: "Today" },
+        { value: 1, label: "Yesterday" },
+        { value: 2, label: "2 Days Ago" },
+        { value: 3, label: "3 Days Ago" },
+        { value: 4, label: "4 Days Ago" },
+        { value: 5, label: "5 Days Ago" },
+        { value: 6, label: "6 Days Ago" },
+    ];
+
+    // Fetch total transactions (by days)
+    const fetchTotalTransactions = async (): Promise<void> => {
+        if (dateRange || days == null) return; // Skip if date range is selected or days is null/undefined
+        setLoading(true);
         try {
-            return true;
-        } catch (err) {
-            console.error('Invalid JWT:', err);
-            setError('Invalid authentication token. Please log in again.');
-            localStorage.removeItem("jwt");
-            return false;
-        }
-    }, []);
-
-    // Compute days and date range for API queries
-    const computeDateRange = useCallback(() => {
-        let computedStartDate = '';
-        let computedEndDate = '';
-        let computedDays = days;
-
-        if (startDate && endDate) {
-            // Use custom date range
-            computedStartDate = startDate;
-            computedEndDate = endDate;
-            // Compute equivalent days for APIs that require it
-            computedDays = moment(endDate).diff(moment(startDate), 'days') + 1;
-        } else if (days >= 0) {
-            // Use days to compute a single-day range
-            const targetDate = moment().subtract(days, 'days');
-            computedStartDate = targetDate.format('YYYY-MM-DD');
-            computedEndDate = computedStartDate;
-            computedDays = 1;
-        } else if (months >= 0) {
-            // Use months to compute a full-month range
-            const targetMonth = moment().subtract(months, 'months');
-            computedStartDate = targetMonth.startOf('month').format('YYYY-MM-DD');
-            computedEndDate = targetMonth.endOf('month').format('YYYY-MM-DD');
-            computedDays = moment(computedEndDate).diff(moment(computedStartDate), 'days') + 1;
-        }
-
-        return { computedStartDate, computedEndDate, computedDays };
-    }, [startDate, endDate, days, months]);
-
-    const fetchSummary = useCallback(async () => {
-        if (!validateJwt()) return;
-
-        try {
-            const { computedStartDate, computedEndDate, computedDays } = computeDateRange();
-
-            // Total transaction (previously total today)
-            const typeQuery = transactionTypes.length
-                ? `transaction_type=${transactionTypes.join(',')}`
-                : '';
-            const daysQuery = computedDays >= 0 ? `days=${computedDays}` : '';
-            const totalQuery = [typeQuery, daysQuery].filter(Boolean).join('&');
-            const totalRes = await fetch(
-                `${API_BASE_URL}/api/history/admin/total-amount-transaction${totalQuery ? `?${totalQuery}` : ''}`,
-                {
-                    headers: { Authorization: `Bearer ${jwt}` },
-                }
-            );
-            if (totalRes.status === 403) {
-                const errorData = await totalRes.json();
-                console.error('403 Error Details (total):', errorData);
-                setError('Access forbidden: Invalid or expired token.');
-                return;
-            }
-            if (!totalRes.ok) {
-                throw new Error(`Failed to fetch total: ${totalRes.status}`);
-            }
-            const total: number = await totalRes.json();
-
-            // Total range
-            const rangeQueryParts = [];
-            if (computedStartDate) rangeQueryParts.push(`startDate=${computedStartDate}`);
-            if (computedEndDate) rangeQueryParts.push(`endDate=${computedEndDate}`);
-            if (transactionTypes.length) rangeQueryParts.push(`transaction_type=${transactionTypes.join(',')}`);
-            const rangeQuery = rangeQueryParts.length ? `?${rangeQueryParts.join('&')}` : '';
-            const totalRangeRes = await fetch(
-                `${API_BASE_URL}/api/history/admin/total-amount-transaction-by-range${rangeQuery}`,
-                {
-                    headers: { Authorization: `Bearer ${jwt}` },
-                }
-            );
-            if (totalRangeRes.status === 403) {
-                const errorData = await totalRangeRes.json();
-                console.error('403 Error Details (totalRange):', errorData);
-                setError('Access forbidden: Invalid or expired token.');
-                return;
-            }
-            if (!totalRangeRes.ok) {
-                throw new Error(`Failed to fetch total range: ${totalRangeRes.status}`);
-            }
-            const totalRange: number = await totalRangeRes.json();
-
-            // Customer fees
-            const feesTypes = ['CUSTOMER_BUY_ASSET', 'CUSTOMER_SELL_ASSET'];
-            const feesQuery = `?transaction_type=${feesTypes.join(',')}`;
-            const feesRes = await fetch(
-                `${API_BASE_URL}/api/history/admin/total-amount-transaction${feesQuery}`,
-                {
-                    headers: { Authorization: `Bearer ${jwt}` },
-                }
-            );
-            if (feesRes.status === 403) {
-                const errorData = await feesRes.json();
-                console.error('403 Error Details (fees):', errorData);
-                setError('Access forbidden: Invalid or expired token.');
-                return;
-            }
-            if (!feesRes.ok) {
-                throw new Error(`Failed to fetch customer fees: ${feesRes.status}`);
-            }
-            const customerFees: number = await feesRes.json();
-
-            // Transaction count
-            const transactionsRes = await fetch(
-                `${API_BASE_URL}/api/history/admin/transaction${typeQuery ? `?${typeQuery}` : ''}`,
-                {
-                    headers: { Authorization: `Bearer ${jwt}` },
-                }
-            );
-            if (transactionsRes.status === 403) {
-                const errorData = await transactionsRes.json();
-                console.error('403 Error Details (transactions):', errorData);
-                setError('Access forbidden: Invalid or expired token.');
-                return;
-            }
-            if (!transactionsRes.ok) {
-                throw new Error(`Failed to fetch transactions: ${transactionsRes.status}`);
-            }
-            const transactionsData = await transactionsRes.json();
-            if (!Array.isArray(transactionsData)) {
-                console.error('Expected transactions array, got:', transactionsData);
-                setSummaryData({
-                    totalToday: total,
-                    totalRange,
-                    customerFees,
-                    transactionCount: 0,
-                });
-                return;
+            const params = new URLSearchParams();
+            params.append("days", days.toString()); // days is guaranteed to be a number here
+            if (transactionTypes.length > 0) {
+                params.append("transaction_type", transactionTypes.join(","));
             }
 
-            const today = moment().format('YYYY-MM-DD');
-            const count = transactionsData.filter((tx: Transaction) =>
-                moment(tx.date).isSame(today, 'day')
-            ).length;
+            const url = `http://localhost:5000/api/history/admin/total-amount-transaction?${params.toString()}`;
+            console.log("Fetching total transactions from:", url);
 
-            setSummaryData({
-                totalToday: total,
-                totalRange,
-                customerFees,
-                transactionCount: count,
+            const jwt = localStorage.getItem("jwt");
+            if (!jwt) {
+                throw new Error("JWT token not found in localStorage");
+            }
+
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${jwt}`,
+                },
             });
-            setError(null);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Total transactions API error:", response.status, errorText);
+                throw new Error(`Failed to fetch total transactions: ${response.status} ${errorText}`);
+            }
+
+            const data: ApiResponse = parseFloat(await response.text());
+            console.log("Total transactions response:", data);
+            setTotalTransactions(isNaN(data) ? 0 : data);
         } catch (error) {
-            console.error('Error fetching summary data:', error);
-            setError('Failed to load summary data. Please try again.');
-            setSummaryData({
-                totalToday: 0,
-                totalRange: 0,
-                customerFees: 0,
-                transactionCount: 0,
+            console.error("Error in fetchTotalTransactions:", error);
+            message.error((error as Error).message || "Error fetching total transactions");
+            setTotalTransactions(0);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Fetch fees collected from customers
+    const fetchCustomerFees = async (): Promise<void> => {
+        if (days == null && !dateRange) return; // Skip if days is null/undefined and no date range
+        setLoading(true);
+        try {
+            const params = new URLSearchParams();
+            if (!dateRange && days != null) params.append("days", days.toString());
+            if (dateRange && dateRange[0] && dateRange[1]) {
+                params.append("startDate", dateRange[0].format("YYYY-MM-DD"));
+                params.append("endDate", dateRange[1].format("YYYY-MM-DD"));
+            }
+            params.append("transaction_type", "CUSTOMER_BUY_ASSET,CUSTOMER_SELL_ASSET");
+
+            const baseUrl = dateRange
+                ? "http://localhost:5000/api/history/admin/total-amount-transaction-by-range"
+                : "http://localhost:5000/api/history/admin/total-amount-transaction";
+            const url = `${baseUrl}?${params.toString()}`;
+            console.log("Fetching customer fees from:", url);
+
+            const jwt = localStorage.getItem("jwt");
+            if (!jwt) {
+                throw new Error("JWT token not found in localStorage");
+            }
+
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${jwt}`,
+                },
             });
-        }
-    }, [transactionTypes, validateJwt, computeDateRange]);
 
-    const fetchDailyVolume = useCallback(async () => {
-        if (!validateJwt()) return;
-
-        try {
-            const { computedStartDate, computedEndDate, computedDays } = computeDateRange();
-            if (!computedStartDate || !computedEndDate) {
-                setDailyVolume([]);
-                return;
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Customer fees API error:", response.status, errorText);
+                throw new Error(`Failed to fetch customer fees: ${response.status} ${errorText}`);
             }
 
-            const typeQuery = transactionTypes.length
-                ? `transaction_type=${transactionTypes.join(',')}`
-                : '';
-            const dateQuery = startDate && endDate
-                ? `startDate=${computedStartDate}&endDate=${computedEndDate}`
-                : `days=${computedDays}`;
-            const query = [typeQuery, dateQuery].filter(Boolean).join('&');
-            const res = await fetch(
-                `${API_BASE_URL}/api/history/admin/total-volume/chart${query ? `?${query}` : ''}`,
-                {
-                    headers: { Authorization: `Bearer ${jwt}` },
-                }
-            );
-            if (res.status === 403) {
-                const errorData = await res.json();
-                console.error('403 Error Details (dailyVolume):', errorData);
-                setError('Access forbidden: Invalid or expired token.');
-                return;
-            }
-            if (!res.ok) {
-                throw new Error(`Failed to fetch daily volume: ${res.status}`);
-            }
-            const data = await res.json();
-            if (!Array.isArray(data)) {
-                console.error('Expected daily volume array, got:', data);
-                setDailyVolume([]);
-                return;
-            }
-            const formattedData: VolumeData[] = data.map(([timestamp, volume]: [number, number]) => ({
-                date: moment(timestamp).format('MM-DD'),
-                volume,
-            }));
-            setDailyVolume(formattedData);
-            setError(null);
+            const data: ApiResponse = parseFloat(await response.text());
+            console.log("Customer fees response:", data);
+            setCustomerFees(isNaN(data) ? 0 : data);
         } catch (error) {
-            console.error('Error fetching daily volume:', error);
-            setError('Failed to load daily volume chart. Please try again.');
-            setDailyVolume([]);
+            console.error("Error in fetchCustomerFees:", error);
+            message.error((error as Error).message || "Error fetching customer fees");
+            setCustomerFees(0);
+        } finally {
+            setLoading(false);
         }
-    }, [transactionTypes, validateJwt, computeDateRange, startDate, endDate]);
+    };
 
-    const fetchMonthlyVolume = useCallback(async () => {
-        if (!validateJwt()) return;
-
+    // Fetch total transactions by date range
+    const fetchTotalByRange = async (): Promise<void> => {
+        if (!dateRange || !dateRange[0] || !dateRange[1]) {
+            setTotalByRange(0);
+            return;
+        }
+        setLoading(true);
         try {
-            const { computedStartDate, computedEndDate } = computeDateRange();
-            if (!computedStartDate || !computedEndDate) {
-                setMonthlyVolume([]);
-                return;
+            const params = new URLSearchParams();
+            params.append("startDate", dateRange[0].format("YYYY-MM-DD"));
+            params.append("endDate", dateRange[1].format("YYYY-MM-DD"));
+            if (transactionTypes.length > 0) {
+                params.append("transaction_type", transactionTypes.join(","));
             }
 
-            const typeQuery = transactionTypes.length
-                ? `transaction_type=${transactionTypes.join(',')}`
-                : '';
-            const monthsQuery = startDate && endDate ? '' : `months=${months}`;
-            const dateQuery = startDate && endDate
-                ? `startDate=${computedStartDate}&endDate=${computedEndDate}`
-                : '';
-            const query = [typeQuery, monthsQuery, dateQuery].filter(Boolean).join('&');
-            const res = await fetch(
-                `${API_BASE_URL}/api/history/admin/total-volume-by-month/chart${query ? `?${query}` : ''}`,
-                {
-                    headers: { Authorization: `Bearer ${jwt}` },
-                }
-            );
-            if (res.status === 403) {
-                const errorData = await res.json();
-                console.error('403 Error Details (monthlyVolume):', errorData);
-                setError('Access forbidden: Invalid or expired token.');
-                return;
+            const url = `http://localhost:5000/api/history/admin/total-amount-transaction-by-range?${params.toString()}`;
+            console.log("Fetching total by range from:", url);
+
+            const jwt = localStorage.getItem("jwt");
+            if (!jwt) {
+                throw new Error("JWT token not found in localStorage");
             }
-            if (!res.ok) {
-                throw new Error(`Failed to fetch monthly volume: ${res.status}`);
+
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${jwt}`,
+                },
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Total by range API error:", response.status, errorText);
+                throw new Error(`Failed to fetch total by range: ${response.status} ${errorText}`);
             }
-            const data = await res.json();
-            if (!Array.isArray(data)) {
-                console.error('Expected monthly volume array, got:', data);
-                setMonthlyVolume([]);
-                return;
-            }
-            const formattedData: VolumeData[] = data.map(([timestamp, volume]: [number, number]) => ({
-                month: moment(timestamp).format('MM/YYYY'),
-                volume,
-            }));
-            setMonthlyVolume(formattedData);
-            setError(null);
+
+            const data: ApiResponse = parseFloat(await response.text());
+            console.log("Total by range response:", data);
+            setTotalByRange(isNaN(data) ? 0 : data);
         } catch (error) {
-            console.error('Error fetching monthly volume:', error);
-            setError('Failed to load monthly volume chart. Please try again.');
-            setMonthlyVolume([]);
+            console.error("Error in fetchTotalByRange:", error);
+            message.error((error as Error).message || "Error fetching total by range");
+            setTotalByRange(0);
+        } finally {
+            setLoading(false);
         }
-    }, [transactionTypes, validateJwt, computeDateRange, startDate, endDate, months]);
+    };
 
-    const fetchTransactions = useCallback(async () => {
-        if (!validateJwt()) return;
-
-        try {
-            const { computedStartDate, computedEndDate } = computeDateRange();
-            const typeQuery = transactionTypes.length
-                ? `?transaction_type=${transactionTypes.join(',')}`
-                : '';
-            const res = await fetch(
-                `${API_BASE_URL}/api/history/admin/transaction${typeQuery}`,
-                {
-                    headers: { Authorization: `Bearer ${jwt}` },
-                }
-            );
-            if (res.status === 403) {
-                const errorData = await res.json();
-                console.error('403 Error Details (transactions):', errorData);
-                setError('Access forbidden: Invalid or expired token.');
-                return;
-            }
-            if (!res.ok) {
-                throw new Error(`Failed to fetch transactions: ${res.status}`);
-            }
-            const data = await res.json();
-            if (!Array.isArray(data)) {
-                console.error('Expected transactions array, got:', data);
-                setTransactions([]);
-                return;
-            }
-            const filtered = data.filter(
-                (tx: Transaction) =>
-                    (!computedStartDate ||
-                        !computedEndDate ||
-                        moment(tx.date).isBetween(computedStartDate, computedEndDate, undefined, '[]')) &&
-                    (!searchUser ||
-                        String(tx.wallet.userId).toLowerCase().includes(searchUser.toLowerCase()))
-            );
-            setTransactions(filtered);
-            setError(null);
-        } catch (error) {
-            console.error('Error fetching transactions:', error);
-            setError('Failed to load transactions. Please try again.');
-            setTransactions([]);
-        }
-    }, [transactionTypes, searchUser, validateJwt, computeDateRange]);
-
+    // Fetch data when days, transactionTypes, or dateRange change
     useEffect(() => {
-        if (!validateJwt()) return;
+        fetchTotalTransactions();
+        fetchCustomerFees();
+        fetchTotalByRange();
+    }, [days, transactionTypes, dateRange]);
 
-        const fetchData = async () => {
-            await Promise.all([
-                fetchSummary(),
-                fetchDailyVolume(),
-                fetchMonthlyVolume(),
-                fetchTransactions(),
-            ]);
-        };
+    // Handle date range change
+    const handleDateRangeChange = (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
+        setDateRange(dates);
+        if (dates) {
+            setDays(null); // Clear days filter when a date range is selected
+        }
+        if (!dates) {
+            // Reset all metrics when date range is cleared
+            setTotalTransactions(0);
+            setCustomerFees(0);
+            setTotalByRange(0);
+        }
+    };
 
-        fetchData();
-    }, [fetchSummary, fetchDailyVolume, fetchMonthlyVolume, fetchTransactions, validateJwt]);
+    // Handle days change, ensuring undefined is converted to null
+    const handleDaysChange = (value: number | undefined) => {
+        setDays(value ?? null); // Convert undefined to null
+        if (value == null) {
+            // Reset all metrics when days is cleared
+            setTotalTransactions(0);
+            setCustomerFees(0);
+            setTotalByRange(0);
+        }
+    };
+
+    // Prepare data for SummaryCards
+    const summaryData = {
+        totalToday: totalTransactions,
+        customerFees: customerFees,
+        totalByRange: totalByRange,
+    };
 
     return (
-        <div className="dashboard-container">
-            {error && (
-                <Alert
-                    message="Error"
-                    description={error}
-                    type="error"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                />
-            )}
-            <Filters
-                transactionTypes={transactionTypes}
-                setTransactionTypes={setTransactionTypes}
-                allTransactionTypes={allTransactionTypes}
-                startDate={startDate}
-                endDate={endDate}
-                setStartDate={setStartDate}
-                setEndDate={setEndDate}
-                days={days}
-                setDays={setDays}
-                months={months}
-                setMonths={setMonths}
-                searchUser={searchUser}
-                setSearchUser={setSearchUser}
-            />
-            <Row gutter={[16, 16]} className="summary-row">
-                <SummaryCards data={summaryData} />
-            </Row>
-            <DailyVolumeChart data={dailyVolume} transactionTypes={transactionTypes} />
-            <MonthlyVolumeChart data={monthlyVolume} transactionTypes={transactionTypes} />
-            <TransactionTable data={transactions} />
+        <div className="p-6 max-w-7xl mx-auto">
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                <div className="flex flex-col w-full sm:w-1/4">
+                    <label className="text-sm font-medium text-gray-700 mb-1">Select Days</label>
+                    <Select
+                        value={days ?? undefined} // Use undefined for placeholder when null
+                        onChange={handleDaysChange} // Use new handler
+                        placeholder="Select days"
+                        className="w-full"
+                        disabled={!!dateRange} // Disable when date range is selected
+                        allowClear // Allow clearing the selection
+                    >
+                        {daysOptions.map((option) => (
+                            <Option key={option.value} value={option.value}>
+                                {option.label}
+                            </Option>
+                        ))}
+                    </Select>
+                </div>
+
+                <div className="flex flex-col w-full sm:w-1/4">
+                    <label className="text-sm font-medium text-gray-700 mb-1">Transaction Type</label>
+                    <Select
+                        mode="multiple"
+                        value={transactionTypes}
+                        onChange={(value: string[]) => setTransactionTypes(value)}
+                        placeholder="Select transaction types"
+                        className="w-full"
+                        allowClear
+                    >
+                        {transactionTypeOptions.map((type) => (
+                            <Option key={type} value={type}>
+                                {type}
+                            </Option>
+                        ))}
+                    </Select>
+                </div>
+
+                <div className="flex flex-col w-full sm:w-1/4">
+                    <label className="text-sm font-medium text-gray-700 mb-1">Select Date Range</label>
+                    <RangePicker
+                        value={dateRange}
+                        onChange={handleDateRangeChange}
+                        format="YYYY-MM-DD"
+                        className="w-full"
+                        allowClear
+                    />
+                </div>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <SummaryCards data={summaryData} loading={loading} />
+            </div>
         </div>
     );
 };

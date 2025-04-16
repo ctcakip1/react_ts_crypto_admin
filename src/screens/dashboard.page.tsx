@@ -4,7 +4,9 @@ import dayjs from "dayjs";
 import SummaryCards from "../components/charts/SummaryCards";
 import DailyVolumeChart from "../components/charts/DailyVolumeChart";
 import MonthlyVolumeChart from "../components/charts/MonthlyVolumeChart";
+import DailyFeeTransactionChart from "../components/charts/DailyFeeTransactionChart";
 import "../styles/dashboardPage.scss";
+import MonthlyFeeTransactionChart from "../components/charts/MonthlyFeeTransactionChart";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -24,11 +26,12 @@ interface MonthsOption {
 
 const DashboardPage: React.FC = () => {
     const [days, setDays] = useState<number | null>(null);
-    const [months, setMonths] = useState<number | null>(null); // New state for months
+    const [months, setMonths] = useState<number | null>(null);
     const [transactionTypes, setTransactionTypes] = useState<string[]>([]);
     const [totalTransactions, setTotalTransactions] = useState<number>(0);
     const [totalByRange, setTotalByRange] = useState<number>(0);
     const [customerFees, setCustomerFees] = useState<number>(0);
+    const [totalFees, setTotalFees] = useState<number>(0);
     const [loading, setLoading] = useState<boolean>(false);
     const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
 
@@ -49,7 +52,7 @@ const DashboardPage: React.FC = () => {
         { value: 2, label: "2 Days Ago" },
         { value: 3, label: "3 Days Ago" },
         { value: 4, label: "4 Days Ago" },
-        { value: 5, label: "5 Days Ago" },
+        { value: 4, label: "5 Days Ago" },
         { value: 6, label: "6 Days Ago" },
     ];
 
@@ -97,6 +100,58 @@ const DashboardPage: React.FC = () => {
             console.error("Error in fetchTotalTransactions:", error);
             message.error((error as Error).message || "Error fetching total transactions");
             setTotalTransactions(0);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Fetch total transaction fees (by days or date range)
+    const fetchTotalFees = async (): Promise<void> => {
+        if (days == null && !dateRange) return;
+        setLoading(true);
+        try {
+            const params = new URLSearchParams();
+            if (!dateRange && days != null) {
+                params.append("days", days.toString());
+            }
+            if (dateRange && dateRange[0] && dateRange[1]) {
+                params.append("startDate", dateRange[0].format("YYYY-MM-DD"));
+                params.append("endDate", dateRange[1].format("YYYY-MM-DD"));
+            }
+            if (transactionTypes.length > 0) {
+                params.append("transaction_type", transactionTypes.join(","));
+            }
+
+            const baseUrl = dateRange
+                ? "http://localhost:5000/api/history/admin/total-fee-transaction-by-range"
+                : "http://localhost:5000/api/history/admin/total-fee-transaction";
+            const url = `${baseUrl}?${params.toString()}`;
+            console.log("Fetching total fees from:", url);
+
+            const jwt = localStorage.getItem("jwt");
+            if (!jwt) {
+                throw new Error("JWT token not found in localStorage");
+            }
+
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${jwt}`,
+                },
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Total fees API error:", response.status, errorText);
+                throw new Error(`Failed to fetch total fees: ${response.status} ${errorText}`);
+            }
+
+            const data: ApiResponse = parseFloat(await response.text());
+            console.log("Total fees response:", data);
+            setTotalFees(isNaN(data) ? 0 : data);
+        } catch (error) {
+            console.error("Error in fetchTotalFees:", error);
+            message.error((error as Error).message || "Error fetching total fees");
+            setTotalFees(0);
         } finally {
             setLoading(false);
         }
@@ -200,6 +255,7 @@ const DashboardPage: React.FC = () => {
     // Fetch data when days, transactionTypes, or dateRange change
     useEffect(() => {
         fetchTotalTransactions();
+        fetchTotalFees();
         fetchCustomerFees();
         fetchTotalByRange();
     }, [days, transactionTypes, dateRange]);
@@ -212,6 +268,7 @@ const DashboardPage: React.FC = () => {
         }
         if (!dates) {
             setTotalTransactions(0);
+            setTotalFees(0);
             setCustomerFees(0);
             setTotalByRange(0);
         }
@@ -222,6 +279,7 @@ const DashboardPage: React.FC = () => {
         setDays(value ?? null);
         if (value == null) {
             setTotalTransactions(0);
+            setTotalFees(0);
             setCustomerFees(0);
             setTotalByRange(0);
         }
@@ -237,6 +295,7 @@ const DashboardPage: React.FC = () => {
         totalToday: totalTransactions,
         customerFees: customerFees,
         totalByRange: totalByRange,
+        totalFees: totalFees,
     };
 
     return (
@@ -317,7 +376,14 @@ const DashboardPage: React.FC = () => {
             <div className="charts-section">
                 <DailyVolumeChart days={days} dateRange={dateRange} transactionTypes={transactionTypes} />
                 <MonthlyVolumeChart transactionTypes={transactionTypes} months={months} />
+
             </div>
+            <div className="charts-section">
+                <DailyFeeTransactionChart days={days} dateRange={dateRange} transactionTypes={transactionTypes} />
+                <MonthlyFeeTransactionChart transactionTypes={transactionTypes} months={months} />
+
+            </div>
+
         </div>
     );
 };

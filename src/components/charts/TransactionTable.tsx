@@ -166,7 +166,23 @@ const TransactionTable: React.FC<TransactionTableProps> = ({ days, dateRange, tr
             title: "Amount",
             dataIndex: "amount",
             key: "amount",
-            render: (amount: number) => `$ ${amount.toLocaleString()}`,
+            render: (amount: number, record: Transaction) => (
+                <span
+                    style={{
+                        color:
+                            record.walletTransactionType === "BUY_ASSET"
+                                ? "red"
+                                : amount >= 0
+                                    ? "green"
+                                    : "red",
+                    }}
+                >
+                    {record.walletTransactionType === "BUY_ASSET"
+                        ? `-${Math.abs(amount).toLocaleString()}`
+                        : amount.toLocaleString()}{" "}
+                    USD
+                </span>
+            ),
         },
     ];
 

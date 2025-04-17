@@ -132,7 +132,7 @@ const LoginPage: React.FC = () => {
                                     }
                                     style={{ color: "#00c4b4" }}
                                 >
-                                    {showPassword ? "hide" : "show"}
+                                    {showPassword}
                                 </Button>
                             }
                         />

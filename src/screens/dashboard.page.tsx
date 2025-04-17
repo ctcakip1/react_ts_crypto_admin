@@ -7,6 +7,7 @@ import MonthlyVolumeChart from "../components/charts/MonthlyVolumeChart";
 import DailyFeeTransactionChart from "../components/charts/DailyFeeTransactionChart";
 import MonthlyFeeTransactionChart from "../components/charts/MonthlyFeeTransactionChart";
 import "../styles/dashboardPage.scss";
+import TransactionByCoinTable from "../components/charts/TransactionByCoinTable";
 import TransactionTable from "../components/charts/TransactionTable";
 
 const { Option } = Select;
@@ -29,8 +30,7 @@ const DashboardPage: React.FC = () => {
     const [days, setDays] = useState<number | null>(null);
     const [months, setMonths] = useState<number | null>(null);
     const [transactionTypes, setTransactionTypes] = useState<string[]>([]);
-    const [totalTransactions, setTotalTransactions] = useState<number>(0);
-    const [totalByRange, setTotalByRange] = useState<number>(0);
+    const [totalTransactions, setTotalTransactions] = useState<number>(0); // Combined state for total transactions
     const [customerFees, setCustomerFees] = useState<number>(0);
     const [totalFees, setTotalFees] = useState<number>(0);
     const [loading, setLoading] = useState<boolean>(false);
@@ -100,6 +100,52 @@ const DashboardPage: React.FC = () => {
         } catch (error) {
             console.error("Error in fetchTotalTransactions:", error);
             message.error((error as Error).message || "Error fetching total transactions");
+            setTotalTransactions(0);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Fetch total transactions by date range
+    const fetchTotalByRange = async (): Promise<void> => {
+        if (!dateRange || !dateRange[0] || !dateRange[1]) {
+            return;
+        }
+        setLoading(true);
+        try {
+            const params = new URLSearchParams();
+            params.append("startDate", dateRange[0].format("YYYY-MM-DD"));
+            params.append("endDate", dateRange[1].format("YYYY-MM-DD"));
+            if (transactionTypes.length > 0) {
+                params.append("transaction_type", transactionTypes.join(","));
+            }
+
+            const url = `http://localhost:5000/api/history/admin/total-amount-transaction-by-range?${params.toString()}`;
+            console.log("Fetching total by range from:", url);
+
+            const jwt = localStorage.getItem("jwt");
+            if (!jwt) {
+                throw new Error("JWT token not found in localStorage");
+            }
+
+            const response = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${jwt}`,
+                },
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Total by range API error:", response.status, errorText);
+                throw new Error(`Failed to fetch total by range: ${response.status} ${errorText}`);
+            }
+
+            const data: ApiResponse = parseFloat(await response.text());
+            console.log("Total by range response:", data);
+            setTotalTransactions(isNaN(data) ? 0 : data);
+        } catch (error) {
+            console.error("Error in fetchTotalByRange:", error);
+            message.error((error as Error).message || "Error fetching total by range");
             setTotalTransactions(0);
         } finally {
             setLoading(false);
@@ -206,53 +252,6 @@ const DashboardPage: React.FC = () => {
         }
     };
 
-    // Fetch total transactions by date range
-    const fetchTotalByRange = async (): Promise<void> => {
-        if (!dateRange || !dateRange[0] || !dateRange[1]) {
-            setTotalByRange(0);
-            return;
-        }
-        setLoading(true);
-        try {
-            const params = new URLSearchParams();
-            params.append("startDate", dateRange[0].format("YYYY-MM-DD"));
-            params.append("endDate", dateRange[1].format("YYYY-MM-DD"));
-            if (transactionTypes.length > 0) {
-                params.append("transaction_type", transactionTypes.join(","));
-            }
-
-            const url = `http://localhost:5000/api/history/admin/total-amount-transaction-by-range?${params.toString()}`;
-            console.log("Fetching total by range from:", url);
-
-            const jwt = localStorage.getItem("jwt");
-            if (!jwt) {
-                throw new Error("JWT token not found in localStorage");
-            }
-
-            const response = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${jwt}`,
-                },
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error("Total by range API error:", response.status, errorText);
-                throw new Error(`Failed to fetch total by range: ${response.status} ${errorText}`);
-            }
-
-            const data: ApiResponse = parseFloat(await response.text());
-            console.log("Total by range response:", data);
-            setTotalByRange(isNaN(data) ? 0 : data);
-        } catch (error) {
-            console.error("Error in fetchTotalByRange:", error);
-            message.error((error as Error).message || "Error fetching total by range");
-            setTotalByRange(0);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     // Fetch data when days, transactionTypes, or dateRange change
     useEffect(() => {
         fetchTotalTransactions();
@@ -271,7 +270,6 @@ const DashboardPage: React.FC = () => {
             setTotalTransactions(0);
             setTotalFees(0);
             setCustomerFees(0);
-            setTotalByRange(0);
         }
     };
 
@@ -282,7 +280,6 @@ const DashboardPage: React.FC = () => {
             setTotalTransactions(0);
             setTotalFees(0);
             setCustomerFees(0);
-            setTotalByRange(0);
         }
     };
 
@@ -293,10 +290,9 @@ const DashboardPage: React.FC = () => {
 
     // Prepare data for SummaryCards
     const summaryData = {
-        totalToday: totalTransactions,
-        customerFees: customerFees,
-        totalByRange: totalByRange,
-        totalFees: totalFees,
+        totalTransactions, // Use the combined totalTransactions
+        customerFees,
+        totalFees,
     };
 
     return (
@@ -382,6 +378,9 @@ const DashboardPage: React.FC = () => {
                 <DailyFeeTransactionChart days={days} dateRange={dateRange} transactionTypes={transactionTypes} />
                 <MonthlyFeeTransactionChart transactionTypes={transactionTypes} months={months} />
             </div>
+
+            {/* Transaction by Coin Table */}
+            <TransactionByCoinTable dateRange={dateRange} />
 
             {/* Transaction Table */}
             <TransactionTable days={days} dateRange={dateRange} transactionTypes={transactionTypes} />

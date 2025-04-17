@@ -1,11 +1,9 @@
-import { useState } from "react";
 import {
     Modal,
     Input,
     notification,
     Form,
     type FormProps,
-    Switch,
     InputNumber,
 } from "antd";
 
@@ -26,10 +24,9 @@ const CreateCoinModal = (props: IProps) => {
     };
 
     const onFinish: FormProps["onFinish"] = async (values) => {
-        const { coinId, name, minimumBuyPrice, transactionFee } = values;
+        const { coinId, minimumBuyPrice, transactionFee } = values;
         const data = {
             coinId,
-            name,
             minimumBuyPrice, // Send as number
             transactionFee: transactionFee != null ? transactionFee : 0,
             totalSupply: 0,
@@ -102,30 +99,11 @@ const CreateCoinModal = (props: IProps) => {
                         {
                             required: true,
                             message: "Please input the coin ID!",
-                        },
-                        {
-                            pattern: /^[a-zA-Z0-9]+$/,
-                            message: "Coin ID must contain only letters and numbers!",
-                        },
+                        }
                     ]}
                 >
                     <Input />
                 </Form.Item>
-
-                <Form.Item
-                    style={{ marginBottom: "5px" }}
-                    label="Name"
-                    name="name"
-                    rules={[
-                        {
-                            required: true,
-                            message: "Please input the coin name!",
-                        },
-                    ]}
-                >
-                    <Input />
-                </Form.Item>
-
                 <Form.Item
                     style={{ marginBottom: "5px" }}
                     label="Minimum Buy Price"

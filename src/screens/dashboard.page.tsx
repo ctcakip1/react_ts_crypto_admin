@@ -27,11 +27,10 @@ interface MonthsOption {
 }
 
 const DashboardPage: React.FC = () => {
-    const [days, setDays] = useState<number | null>(null);
-    const [months, setMonths] = useState<number | null>(null);
-    const [transactionTypes, setTransactionTypes] = useState<string[]>([]);
-    const [totalTransactions, setTotalTransactions] = useState<number>(0); // Combined state for total transactions
-    const [customerFees, setCustomerFees] = useState<number>(0);
+    const [days, setDays] = useState<number | null>(0); // Default to "Today"
+    const [months, setMonths] = useState<number | null>(1); // Default to "1 Month"
+    const [transactionTypes, setTransactionTypes] = useState<string[]>(["BUY_ASSET", "SELL_ASSET"]); // Default to BUY_ASSET and SELL_ASSET
+    const [totalTransactions, setTotalTransactions] = useState<number>(0);
     const [totalFees, setTotalFees] = useState<number>(0);
     const [loading, setLoading] = useState<boolean>(false);
     const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
@@ -46,15 +45,13 @@ const DashboardPage: React.FC = () => {
         "INTRODUCTORY_GIFT",
     ];
 
-    // Days options (fixed duplicate entry for value: 4)
+    // Days options
     const daysOptions: DaysOption[] = [
         { value: 0, label: "Today" },
-        { value: 1, label: "Yesterday" },
-        { value: 2, label: "2 Days Ago" },
-        { value: 3, label: "3 Days Ago" },
-        { value: 4, label: "4 Days Ago" },
-        { value: 5, label: "5 Days Ago" },
-        { value: 6, label: "6 Days Ago" },
+        { value: 7, label: "A week" },
+        { value: 30, label: "A month" },
+        { value: 90, label: "Three month" },
+        { value: 365, label: "One year" },
     ];
 
     // Months options (1 to 12 months)
@@ -204,59 +201,10 @@ const DashboardPage: React.FC = () => {
         }
     };
 
-    // Fetch fees collected from customers
-    const fetchCustomerFees = async (): Promise<void> => {
-        if (days == null && !dateRange) return;
-        setLoading(true);
-        try {
-            const params = new URLSearchParams();
-            if (!dateRange && days != null) params.append("days", days.toString());
-            if (dateRange && dateRange[0] && dateRange[1]) {
-                params.append("startDate", dateRange[0].format("YYYY-MM-DD"));
-                params.append("endDate", dateRange[1].format("YYYY-MM-DD"));
-            }
-            params.append("transaction_type", "CUSTOMER_BUY_ASSET,CUSTOMER_SELL_ASSET");
-
-            const baseUrl = dateRange
-                ? "http://localhost:5000/api/history/admin/total-amount-transaction-by-range"
-                : "http://localhost:5000/api/history/admin/total-amount-transaction";
-            const url = `${baseUrl}?${params.toString()}`;
-            console.log("Fetching customer fees from:", url);
-
-            const jwt = localStorage.getItem("jwt");
-            if (!jwt) {
-                throw new Error("JWT token not found in localStorage");
-            }
-
-            const response = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${jwt}`,
-                },
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error("Customer fees API error:", response.status, errorText);
-                throw new Error(`Failed to fetch customer fees: ${response.status} ${errorText}`);
-            }
-
-            const data: ApiResponse = parseFloat(await response.text());
-            console.log("Customer fees response:", data);
-            setCustomerFees(isNaN(data) ? 0 : data);
-        } catch (error) {
-            console.error("Error in fetchCustomerFees:", error);
-            message.error((error as Error).message || "Error fetching customer fees");
-            setCustomerFees(0);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     // Fetch data when days, transactionTypes, or dateRange change
     useEffect(() => {
         fetchTotalTransactions();
         fetchTotalFees();
-        fetchCustomerFees();
         fetchTotalByRange();
     }, [days, transactionTypes, dateRange]);
 
@@ -269,7 +217,6 @@ const DashboardPage: React.FC = () => {
         if (!dates) {
             setTotalTransactions(0);
             setTotalFees(0);
-            setCustomerFees(0);
         }
     };
 
@@ -279,7 +226,6 @@ const DashboardPage: React.FC = () => {
         if (value == null) {
             setTotalTransactions(0);
             setTotalFees(0);
-            setCustomerFees(0);
         }
     };
 
@@ -288,10 +234,18 @@ const DashboardPage: React.FC = () => {
         setMonths(value ?? null);
     };
 
+    // Handle transaction type change (prevent clearing all)
+    const handleTransactionTypeChange = (value: string[]) => {
+        if (value.length === 0) {
+            message.warning("You must select at least one transaction type.");
+            return; // Prevent clearing all
+        }
+        setTransactionTypes(value);
+    };
+
     // Prepare data for SummaryCards
     const summaryData = {
-        totalTransactions, // Use the combined totalTransactions
-        customerFees,
+        totalTransactions,
         totalFees,
     };
 
@@ -322,10 +276,10 @@ const DashboardPage: React.FC = () => {
                     <Select
                         mode="multiple"
                         value={transactionTypes}
-                        onChange={(value: string[]) => setTransactionTypes(value)}
+                        onChange={handleTransactionTypeChange}
                         placeholder="Select transaction types"
                         className="w-full"
-                        allowClear
+                        allowClear={false} // Disable clearing to enforce at least one selection
                     >
                         {transactionTypeOptions.map((type) => (
                             <Option key={type} value={type}>

@@ -22,11 +22,14 @@ interface TransactionByCoinTableProps {
 const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ dateRange }) => {
     const [data, setData] = useState<TableData[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const pageSize = 15; // 15 records per page, matching TransactionTable
 
     // Fetch transaction data by coin
     const fetchTransactionByCoin = async (): Promise<void> => {
         if (!dateRange || !dateRange[0] || !dateRange[1]) {
             setData([]);
+            setCurrentPage(1); // Reset to page 1 when filters are cleared
             return;
         }
 
@@ -66,10 +69,12 @@ const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ dateRan
             }));
 
             setData(transformedData);
+            setCurrentPage(1); // Reset to page 1 on new data fetch
         } catch (error) {
             console.error("Error in fetchTransactionByCoin:", error);
             message.error((error as Error).message || "Error fetching transaction by coin data");
             setData([]);
+            setCurrentPage(1);
         } finally {
             setLoading(false);
         }
@@ -79,6 +84,22 @@ const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ dateRan
     useEffect(() => {
         fetchTransactionByCoin();
     }, [dateRange]);
+
+    // Handle page change with custom logic
+    const handlePageChange = (page: number) => {
+        // Prevent going to a negative or zero page
+        if (page < 1) {
+            return;
+        }
+
+        // Prevent going to the next page if the current page doesn't have 15 records
+        if (page > currentPage && data.length < currentPage * pageSize) {
+            message.warning("Cannot go to the next page: Current page has fewer than 15 records.");
+            return;
+        }
+
+        setCurrentPage(page);
+    };
 
     // Define columns for the antd Table
     const columns = [
@@ -107,7 +128,14 @@ const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ dateRan
                     locale={{
                         emptyText: <span className="text-muted">No data available. Please select a date range.</span>,
                     }}
-                    pagination={false} // No pagination needed for this table
+                    pagination={{
+                        current: currentPage,
+                        pageSize: pageSize,
+                        total: data.length,
+                        onChange: handlePageChange,
+                        showSizeChanger: false, // Disable changing page size
+                        hideOnSinglePage: false, // Always show pagination
+                    }}
                 />
             </div>
         </div>

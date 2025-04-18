@@ -332,7 +332,7 @@ const OrdersTable = () => {
                         allowClear
                         value={filters.days}
                     >
-                        {[1, 2, 3, 4, 5, 6, 7, 14, 30].map((day) => (
+                        {[1, 7, 30, 90, 365].map((day) => (
                             <Option key={day} value={day}>
                                 {day} day{day > 1 ? "s" : ""}
                             </Option>

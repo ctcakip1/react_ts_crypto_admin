@@ -17,13 +17,13 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({ data, loading = false }) =>
     return (
         <Row gutter={[24, 24]}>
             <Col xs={24} sm={12} md={8} className="summary-card">
-                <Card title="💰 Tổng giao dịch">
+                <Card title="💰 Total Transaction">
                     <p>{loading ? "Loading..." : `$${data.totalTransactions.toFixed(2)}`}</p>
                 </Card>
             </Col>
 
             <Col xs={24} sm={12} md={8} className="summary-card">
-                <Card title="💵 Tổng phí giao dịch">
+                <Card title="💵 Collection Of Transaction Fees">
                     <p>{loading ? "Loading..." : `$${data.totalFees.toFixed(2)}`}</p>
                 </Card>
             </Col>

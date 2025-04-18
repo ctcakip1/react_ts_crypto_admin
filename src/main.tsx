@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, Outlet, RouterProvider, Link, Navigate, useNavigate } from "react-router-dom";
-import { UserOutlined, CheckCircleOutlined, CloseCircleOutlined, DollarOutlined, TransactionOutlined, ShoppingCartOutlined, BankOutlined, DashboardOutlined, FireOutlined, PlusCircleOutlined, StopOutlined } from "@ant-design/icons";
+import { UserOutlined, CheckCircleOutlined, CloseCircleOutlined, DollarOutlined, TransactionOutlined, ShoppingCartOutlined, BankOutlined, DashboardOutlined, FireOutlined, PlusCircleOutlined, StopOutlined, NotificationOutlined } from "@ant-design/icons";
 import { Button, Dropdown, Form, Input, Menu, message, Modal, notification, Descriptions, type MenuProps } from "antd";
 import CoinsPage from "./screens/coins.page.tsx";
 import TransactionsPage from "./screens/transactions.page.tsx";
@@ -15,6 +15,7 @@ import NewCoinsPage from "./components/coins/new.coin.table.tsx";
 import UsersPage from "./screens/users.page.tsx";
 import DashboardPage from "./screens/dashboard.page.tsx";
 import DelistedCoinsPage from "./components/coins/delisted.coin.table.tsx";
+import NotificationPage from "./screens/notification.page.tsx";
 
 // Định nghĩa interface cho dữ liệu profile
 interface UserProfile {
@@ -263,6 +264,11 @@ const Header: React.FC<{ userRole: string }> = ({ userRole }) => {
                     key: "withdrawals",
                     icon: <BankOutlined />,
                 },
+                {
+                    label: <Link to={"/send-notification"}>Send Notification</Link>,
+                    key: "/send-notification",
+                    icon: <NotificationOutlined />,
+                },
             ]
             : []),
     ];
@@ -405,6 +411,10 @@ const router = createBrowserRouter([
             {
                 path: "users/:userId/wallet",
                 element: <UserWalletDisplay />,
+            },
+            {
+                path: "send-notification",
+                element: <NotificationPage />,
             },
         ],
     },

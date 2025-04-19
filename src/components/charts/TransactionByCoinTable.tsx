@@ -16,10 +16,11 @@ interface TableData {
 
 // Define props interface
 interface TransactionByCoinTableProps {
+    days: number | null;
     dateRange: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null;
 }
 
-const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ dateRange }) => {
+const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ days, dateRange }) => {
     const [data, setData] = useState<TableData[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
     const [currentPage, setCurrentPage] = useState<number>(1);
@@ -27,7 +28,7 @@ const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ dateRan
 
     // Fetch transaction data by coin
     const fetchTransactionByCoin = async (): Promise<void> => {
-        if (!dateRange || !dateRange[0] || !dateRange[1]) {
+        if (days == null && (!dateRange || !dateRange[0] || !dateRange[1])) {
             setData([]);
             setCurrentPage(1); // Reset to page 1 when filters are cleared
             return;
@@ -36,8 +37,13 @@ const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ dateRan
         setLoading(true);
         try {
             const params = new URLSearchParams();
-            params.append("startDate", dateRange[0].format("YYYY-MM-DD"));
-            params.append("endDate", dateRange[1].format("YYYY-MM-DD"));
+            if (!dateRange && days != null) {
+                params.append("days", days.toString());
+            }
+            if (dateRange && dateRange[0] && dateRange[1]) {
+                params.append("start_date", dateRange[0].format("YYYY-MM-DD"));
+                params.append("end_date", dateRange[1].format("YYYY-MM-DD"));
+            }
 
             const url = `http://localhost:5000/api/orders/admin/total-transactions-range?${params.toString()}`;
             console.log("Fetching transaction by coin from:", url);
@@ -83,7 +89,7 @@ const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ dateRan
     // Fetch data when dateRange changes
     useEffect(() => {
         fetchTransactionByCoin();
-    }, [dateRange]);
+    }, [days, dateRange]);
 
     // Handle page change with custom logic
     const handlePageChange = (page: number) => {

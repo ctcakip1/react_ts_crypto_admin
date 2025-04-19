@@ -24,6 +24,11 @@ const Notification: React.FC = () => {
             .replace(/<p><br\s*\/?><\/p>/g, "") // Remove <p> with just <br>
             // Ensure nested ordered lists use lower-alpha explicitly
             .replace(/<ol type="a"/g, '<ol style="list-style-type: lower-alpha;"')
+            // Convert react-quill alignment classes to inline styles for Gmail compatibility
+            .replace(/class="ql-align-center"/g, 'style="text-align: center;"')
+            .replace(/class="ql-align-right"/g, 'style="text-align: right;"')
+            .replace(/class="ql-align-justify"/g, 'style="text-align: justify;"')
+            .replace(/class="ql-align-left"/g, 'style="text-align: left;"')
             .trim();
 
         const htmlLines = [
@@ -48,17 +53,19 @@ const Notification: React.FC = () => {
             '            border-radius: 8px;',
             '            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);',
             '            padding: 30px;',
-            '            text-align: center;',
+            '            /* Removed text-align: center; to prevent overriding child alignments */',
             '        }',
             '        h1 {',
             '            color: #f7931a;',
             '            font-size: 24px;',
             '            margin-bottom: 20px;',
+            '            text-align: center;', // Keep h1 centered
             '        }',
             '        .content {',
             '            font-size: 16px;',
             '            line-height: 1.6;',
             '            margin-bottom: 20px;',
+            '            text-align: left;', // Default to left alignment for content
             '        }',
             '        .content p {',
             '            margin: 0 0 10px 0;',
@@ -82,19 +89,11 @@ const Notification: React.FC = () => {
             '        .content ol ol, .content ul ul {',
             '            margin-left: 20px;',
             '        }',
-            '        .content .ql-align-center {',
-            '            text-align: center;',
-            '        }',
-            '        .content .ql-align-right {',
-            '            text-align: right;',
-            '        }',
-            '        .content .ql-align-justify {',
-            '            text-align: justify;',
-            '        }',
             '        .date {',
             '            font-size: 18px;',
             '            color: #555;',
             '            margin: 20px 0;',
+            '            text-align: center;', // Keep date centered
             '        }',
             '        .btn {',
             '            display: inline-block;',
@@ -104,6 +103,7 @@ const Notification: React.FC = () => {
             '            text-decoration: none;',
             '            border-radius: 6px;',
             '            font-weight: bold;',
+            '            text-align: center;', // Keep button centered
             '        }',
             '        .btn:hover {',
             '            background: #e28114;',
@@ -111,11 +111,8 @@ const Notification: React.FC = () => {
             '    </style>',
             '</head>',
             '<body>',
-            '    <div className="container">',
-            `        <h1>${eventName || "Notification"}</h1>`,
-            `        <div className="content">${cleanedHtml || "<p>No content provided.</p>"}</div>`,
-            `        <p className="date">Thời gian: <strong>${dayjs().format("DD/MM/YYYY")}</strong></p>`,
-            '        <a href="#" className="btn">Tìm hiểu thêm</a>',
+            '    <div class="container">', // Changed className to class for HTML output
+            `        <div class="content">${cleanedHtml || "<p>No content provided.</p>"}</div>`,
             '    </div>',
             '</body>',
             '</html>',

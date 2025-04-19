@@ -334,7 +334,7 @@ const DashboardPage: React.FC = () => {
             </div>
 
             {/* Transaction by Coin Table */}
-            <TransactionByCoinTable dateRange={dateRange} />
+            <TransactionByCoinTable days={days} dateRange={dateRange} />
 
             {/* Transaction Table */}
             <TransactionTable days={days} dateRange={dateRange} transactionTypes={transactionTypes} />

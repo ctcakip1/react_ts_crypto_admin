@@ -19,7 +19,7 @@ const Notification: React.FC = () => {
     // Function to convert editor HTML to full HTML document
     const convertTextToHtml = (editorHtml: string, eventName: string): string => {
         // Clean up editor HTML but preserve formatting and structure
-        const cleanedHtml = editorHtml
+        let cleanedHtml = editorHtml
             .replace(/<p>\s*<\/p>/g, "") // Remove empty <p> tags
             .replace(/<p><br\s*\/?><\/p>/g, "") // Remove <p> with just <br>
             // Ensure nested ordered lists use lower-alpha explicitly
@@ -30,6 +30,9 @@ const Notification: React.FC = () => {
             .replace(/class="ql-align-justify"/g, 'style="text-align: justify;"')
             .replace(/class="ql-align-left"/g, 'style="text-align: left;"')
             .trim();
+
+        // Additional fix for nested lists: Ensure nested <ol> is properly indented
+        cleanedHtml = cleanedHtml.replace(/(<li>.*?)(\s*<ol\b[^>]*>)/g, '$1<div class="nested-list">$2</div>');
 
         const htmlLines = [
             '<!DOCTYPE html>',
@@ -53,19 +56,18 @@ const Notification: React.FC = () => {
             '            border-radius: 8px;',
             '            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);',
             '            padding: 30px;',
-            '            /* Removed text-align: center; to prevent overriding child alignments */',
             '        }',
             '        h1 {',
             '            color: #f7931a;',
             '            font-size: 24px;',
             '            margin-bottom: 20px;',
-            '            text-align: center;', // Keep h1 centered
+            '            text-align: center;',
             '        }',
             '        .content {',
             '            font-size: 16px;',
             '            line-height: 1.6;',
             '            margin-bottom: 20px;',
-            '            text-align: left;', // Default to left alignment for content
+            '            text-align: left;',
             '        }',
             '        .content p {',
             '            margin: 0 0 10px 0;',
@@ -80,20 +82,27 @@ const Notification: React.FC = () => {
             '            text-decoration: underline;',
             '        }',
             '        .content ol, .content ul {',
-            '            margin: 0 0 10px 20px;',
+            '            margin: 0 0 10px 0;',
             '            padding: 0;',
+            '            list-style-position: inside;', // Đưa số/chữ cái vào trong vùng nội dung
             '        }',
             '        .content ol li, .content ul li {',
             '            margin: 0 0 5px 0;',
+            '            text-align: inherit;', // Đảm bảo text-align của li thừa hưởng từ cha
             '        }',
             '        .content ol ol, .content ul ul {',
-            '            margin-left: 20px;',
+            '            margin: 0 0 10px 20px;', // Thụt lề 20px cho danh sách lồng nhau
+            '            padding: 0;',
+            '            list-style-position: inside;', // Áp dụng list-style-position: inside cho danh sách lồng nhau
+            '        }',
+            '        .nested-list {',
+            '            margin-left: 20px;', // Thêm thụt lề cho danh sách lồng nhau
             '        }',
             '        .date {',
             '            font-size: 18px;',
             '            color: #555;',
             '            margin: 20px 0;',
-            '            text-align: center;', // Keep date centered
+            '            text-align: center;',
             '        }',
             '        .btn {',
             '            display: inline-block;',
@@ -103,7 +112,7 @@ const Notification: React.FC = () => {
             '            text-decoration: none;',
             '            border-radius: 6px;',
             '            font-weight: bold;',
-            '            text-align: center;', // Keep button centered
+            '            text-align: center;',
             '        }',
             '        .btn:hover {',
             '            background: #e28114;',
@@ -111,7 +120,7 @@ const Notification: React.FC = () => {
             '    </style>',
             '</head>',
             '<body>',
-            '    <div class="container">', // Changed className to class for HTML output
+            '    <div class="container">',
             `        <div class="content">${cleanedHtml || "<p>No content provided.</p>"}</div>`,
             '    </div>',
             '</body>',

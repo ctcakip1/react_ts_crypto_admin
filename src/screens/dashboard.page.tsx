@@ -210,11 +210,13 @@ const DashboardPage: React.FC = () => {
 
     // Handle date range change
     const handleDateRangeChange = (dates: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null) => {
+
         setDateRange(dates);
         if (dates) {
             setDays(null);
-        }
-        if (!dates) {
+        } else {
+            // When dateRange is cleared, revert days to default (Today)
+            setDays(0);
             setTotalTransactions(0);
             setTotalFees(0);
         }
@@ -222,11 +224,14 @@ const DashboardPage: React.FC = () => {
 
     // Handle days change
     const handleDaysChange = (value: number | undefined) => {
+        console.log("handleDaysChange - new days:", value);
         setDays(value ?? null);
         if (value == null) {
             setTotalTransactions(0);
             setTotalFees(0);
         }
+        // Clear dateRange when days is selected
+        setDateRange(null);
     };
 
     // Handle months change
@@ -248,6 +253,9 @@ const DashboardPage: React.FC = () => {
         totalTransactions,
         totalFees,
     };
+
+    // Log props being passed to TransactionByCoinTable
+    console.log("Passing to TransactionByCoinTable - days:", days, "dateRange:", dateRange);
 
     return (
         <div className="dashboard-page">

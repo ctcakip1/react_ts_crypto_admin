@@ -28,22 +28,28 @@ const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ days, d
 
     // Fetch transaction data by coin
     const fetchTransactionByCoin = async (): Promise<void> => {
-        if (days == null && (!dateRange || !dateRange[0] || !dateRange[1])) {
+        // Adjusted condition: Fetch if either days is valid (including 0) or dateRange is valid
+        const isDateRangeValid = dateRange && dateRange[0] && dateRange[1];
+        const isDaysValid = days != null; // Allow days=0 for "Today"
+        if (!isDateRangeValid && !isDaysValid) {
+            console.log("Returning early - no valid filters. days:", days, "dateRange:", dateRange);
             setData([]);
-            setCurrentPage(1); // Reset to page 1 when filters are cleared
+            setCurrentPage(1);
             return;
         }
 
         setLoading(true);
         try {
             const params = new URLSearchParams();
-            if (!dateRange && days != null) {
-                params.append("days", days.toString());
+            if (isDaysValid && !isDateRangeValid) {
+                params.append("days", days!.toString());
             }
-            if (dateRange && dateRange[0] && dateRange[1]) {
-                params.append("start_date", dateRange[0].format("YYYY-MM-DD"));
-                params.append("end_date", dateRange[1].format("YYYY-MM-DD"));
+            if (isDateRangeValid) {
+                params.append("startDate", dateRange![0]!.format("YYYY-MM-DD"));
+                params.append("endDate", dateRange![1]!.format("YYYY-MM-DD"));
             }
+            // Add cache-busting parameter
+            params.append("t", Date.now().toString());
 
             const url = `http://localhost:5000/api/orders/admin/total-transactions-range?${params.toString()}`;
             console.log("Fetching transaction by coin from:", url);
@@ -73,9 +79,10 @@ const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ days, d
                 coin,
                 amount,
             }));
+            console.log("Transformed data:", transformedData);
 
             setData(transformedData);
-            setCurrentPage(1); // Reset to page 1 on new data fetch
+            setCurrentPage(1);
         } catch (error) {
             console.error("Error in fetchTransactionByCoin:", error);
             message.error((error as Error).message || "Error fetching transaction by coin data");
@@ -86,26 +93,25 @@ const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ days, d
         }
     };
 
-    // Fetch data when dateRange changes
+    // Fetch data when dateRange or days changes
     useEffect(() => {
         fetchTransactionByCoin();
     }, [days, dateRange]);
 
     // Handle page change with custom logic
     const handlePageChange = (page: number) => {
-        // Prevent going to a negative or zero page
         if (page < 1) {
             return;
         }
-
-        // Prevent going to the next page if the current page doesn't have 15 records
         if (page > currentPage && data.length < currentPage * pageSize) {
             message.warning("Cannot go to the next page: Current page has fewer than 15 records.");
             return;
         }
-
         setCurrentPage(page);
     };
+
+    // Log dataSource to verify table rendering
+    console.log("Table dataSource:", data);
 
     // Define columns for the antd Table
     const columns = [
@@ -132,15 +138,15 @@ const TransactionByCoinTable: React.FC<TransactionByCoinTableProps> = ({ days, d
                     rowKey="coin"
                     loading={loading}
                     locale={{
-                        emptyText: <span className="text-muted">No data available. Please select a date range.</span>,
+                        emptyText: <span className="text-muted">No data available. Please select a date range or number of days.</span>,
                     }}
                     pagination={{
                         current: currentPage,
                         pageSize: pageSize,
                         total: data.length,
                         onChange: handlePageChange,
-                        showSizeChanger: false, // Disable changing page size
-                        hideOnSinglePage: false, // Always show pagination
+                        showSizeChanger: false,
+                        hideOnSinglePage: false,
                     }}
                 />
             </div>
